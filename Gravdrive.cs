@@ -4,9 +4,9 @@
 // average ms per tick, 0.3 ms is allowed on most servers
 double maxMs = 0.3;
 // run every 1, 10 or 100 tick, 1 tick = 16.6 ms
-// use 1 if the ship won't stop moving when dampeners are on, otherwise use 10
+// 1 is probably fine, use 10 if it somehow overheats. 
 // lower value = higher ms usage per tick
-int updateFrequency = 10;
+int updateFrequency = 1;
 
 // no touchie below this point unless you know what you're doing ------------------------------------------------
 
