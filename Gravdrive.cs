@@ -9,76 +9,77 @@ double maxMs = 0.3;
 int lowestSpeed = 0;
 // automatically set the field size of the gravity generators
 bool autoFieldSize = true;
+// how often to check for changes in blocks such as damage
+// 60 ticks = second
+int checkEveryTicks = 30;
 // --------------- settings ---------------
 
 // no touchie below this point unless you know what you're doing ------------------------------------------------
 
 IMyCockpit cockpit;
 List<IMyCockpit> cockpits = new List<IMyCockpit>();
-List<IMyGravityGenerator>[] gens = new List<IMyGravityGenerator>[6]; // 6 lists, one for each orientation
-List<IMyGravityGenerator> allGens = new List<IMyGravityGenerator>();
-List<IMyArtificialMassBlock> allMasses = new List<IMyArtificialMassBlock>();
+List<IMyGravityGenerator> gens = new List<IMyGravityGenerator>();
+List<IMyArtificialMassBlock> masses = new List<IMyArtificialMassBlock>();
 IMyTextSurface screen;
 Vector3I fieldMax, fieldMin;
 
 public Program()
 {
     Echo("Loading...");
-    // init lists for gens
-    for (int orientation = 0; orientation < 6; orientation++)
-    {
-        gens[orientation] = new List<IMyGravityGenerator>();
-    }
     GetBlocks();
     SetFieldSize();
     Runtime.UpdateFrequency = UpdateFrequency.Update1;
-    Echo("Loaded succesfully.");
+    Echo("Loaded succesfully!");
 }
 
 Vector3D moveInd = new Vector3D();
 Vector3D velVect = new Vector3D();
 double averageRuntime = 0;
-int everyTenTicks = 0;
-bool skipNextTick = false;
 bool waitTillErrorFixed = false;
+int tickNum = 0;
 
 public void Main(string argument, UpdateType updateSource)
 {
-    if (skipNextTick)
+    averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs * 0.01);
+    if (averageRuntime > maxMs * 0.9)
     {
-        skipNextTick = false;
         return;
     }
 
-    // to conserve available runtime, only check some things every 10 ticks
-    everyTenTicks++;
-    if (everyTenTicks == 10)
+    tickNum++;
+    if (tickNum == checkEveryTicks)
     {
-        everyTenTicks = 0;
+        tickNum = 0;
         SetFieldSize();
         GetBlocks(true);
     }
+
     if (waitTillErrorFixed) return;
+
     screen.WriteText("");
     Echo("Gravdrive");
-    Echo("Gravity generators: " + allGens.Count.ToString());
-    Echo("Artificial masses: " + allMasses.Count.ToString());
+    Echo("Gravity generators: " + gens.Count.ToString());
+    Echo("Artificial masses: " + masses.Count.ToString());
     Echo("Auto field size: " + autoFieldSize.ToString());
     Echo("Lowest speed: " + lowestSpeed.ToString());
-    screen.WriteText("Efficiency: " + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%\n");
     Echo("Efficiency: " + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%");
+    Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms");
+    screen.WriteText("Efficiency: " + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%");
+    screen.WriteText("\nRuntime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms\n", true);
 
     if (Math.Round(cockpit.GetShipSpeed(), 2) == 0 && NoPilotInput())
     {
         screen.WriteText("Velocity: Stationary\nStatus: Standby", true);
         Echo("Velocity: Stationary\nStatus: Standby");
         PowerOnOff(false);
+        return;
     }
     else if (!cockpit.DampenersOverride && NoPilotInput())
     {
         screen.WriteText("Velocity: " + Math.Round(cockpit.GetShipVelocities().LinearVelocity.Length(), 2).ToString() + " m/s\nStatus: Drifting", true);
         Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: Drifting");
         PowerOnOff(false);
+        return;
     }
     else
     {
@@ -92,52 +93,35 @@ public void Main(string argument, UpdateType updateSource)
         PowerOnOff(true);
     }
 
-    // vector of momentum in each direction, set to 0 if user input is detected in said direction or if dampeners are off (could be checked later but easier to integrate here)
+    // vector of momentum in each direction, set to 0 based on a few factors
     velVect.X = Vector3D.TransformNormal(cockpit.GetShipVelocities().LinearVelocity, MatrixD.Transpose(cockpit.WorldMatrix)).X * IsZero(cockpit.MoveIndicator.X) * Convert.ToInt32(cockpit.DampenersOverride) * UnderLowestSpeed();
     velVect.Y = Vector3D.TransformNormal(cockpit.GetShipVelocities().LinearVelocity, MatrixD.Transpose(cockpit.WorldMatrix)).Y * IsZero(cockpit.MoveIndicator.Y) * Convert.ToInt32(cockpit.DampenersOverride) * UnderLowestSpeed();
     velVect.Z = Vector3D.TransformNormal(cockpit.GetShipVelocities().LinearVelocity, MatrixD.Transpose(cockpit.WorldMatrix)).Z * IsZero(cockpit.MoveIndicator.Z) * Convert.ToInt32(cockpit.DampenersOverride) * UnderLowestSpeed();
-
     moveInd = cockpit.MoveIndicator * 9.8f;
 
-    // set power value for each gravity drive in each orientation
-    for (int orientation = 0; orientation < 6; orientation++)
+    foreach (IMyGravityGenerator gen in gens)
     {
-        foreach (IMyGravityGenerator gen in gens[orientation])
+        switch (cockpit.Orientation.TransformDirectionInverse(gen.Orientation.Up))
         {
-            switch (cockpit.Orientation.TransformDirectionInverse(gen.Orientation.Up))
-            {
-                case Base6Directions.Direction.Up:
-                    gen.GravityAcceleration = -GravAccerelation(moveInd.Y, -velVect.Y);
-                    break;
-                case Base6Directions.Direction.Down:
-                    gen.GravityAcceleration = GravAccerelation(moveInd.Y, -velVect.Y);
-                    break;
-                case Base6Directions.Direction.Right:
-                    gen.GravityAcceleration = -GravAccerelation(moveInd.X, -velVect.X);
-                    break;
-                case Base6Directions.Direction.Left:
-                    gen.GravityAcceleration = GravAccerelation(moveInd.X, -velVect.X);
-                    break;
-                case Base6Directions.Direction.Backward:
-                    gen.GravityAcceleration = -GravAccerelation(moveInd.Z, -velVect.Z);
-                    break;
-                case Base6Directions.Direction.Forward:
-                    gen.GravityAcceleration = GravAccerelation(moveInd.Z, -velVect.Z);
-                    break;
-            }
+            case Base6Directions.Direction.Up:
+                gen.GravityAcceleration = -GravAccerelation(moveInd.Y, -velVect.Y);
+                break;
+            case Base6Directions.Direction.Down:
+                gen.GravityAcceleration = GravAccerelation(moveInd.Y, -velVect.Y);
+                break;
+            case Base6Directions.Direction.Right:
+                gen.GravityAcceleration = -GravAccerelation(moveInd.X, -velVect.X);
+                break;
+            case Base6Directions.Direction.Left:
+                gen.GravityAcceleration = GravAccerelation(moveInd.X, -velVect.X);
+                break;
+            case Base6Directions.Direction.Backward:
+                gen.GravityAcceleration = -GravAccerelation(moveInd.Z, -velVect.Z);
+                break;
+            case Base6Directions.Direction.Forward:
+                gen.GravityAcceleration = GravAccerelation(moveInd.Z, -velVect.Z);
+                break;
         }
-    }
-
-    // calculate average runtime per tick
-    averageRuntime = averageRuntime * 0.99 + ((Runtime.LastRunTimeMs * 0.01));
-    if (averageRuntime > maxMs * 0.9)
-    {
-        skipNextTick = true;
-    }
-    else
-    {
-        Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms");
-        screen.WriteText("\nRuntime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms", true);
     }
 }
 public void PowerOnOff(bool power)
@@ -145,11 +129,11 @@ public void PowerOnOff(bool power)
     // this uses a ton of runtime, don't turn off if using more than 70% of allowed ms
     if (power == false && (averageRuntime > maxMs * 0.7)) return;
 
-    foreach (IMyArtificialMassBlock mass in allMasses)
+    foreach (IMyArtificialMassBlock mass in masses)
     {
         mass.Enabled = power;
     }
-    foreach (IMyGravityGenerator gen in allGens)
+    foreach (IMyGravityGenerator gen in gens)
     {
         gen.Enabled = power;
     }
@@ -182,7 +166,7 @@ public void SetFieldSize()
 {
     if (fieldMax == Vector3I.Zero || fieldMin == Vector3I.Zero)
     {
-        foreach (IMyArtificialMassBlock mass in allMasses)
+        foreach (IMyArtificialMassBlock mass in masses)
         {
             if (fieldMax.X > mass.Max.X) fieldMax.X = mass.Max.X;
             if (fieldMax.Y > mass.Max.Y) fieldMax.Y = mass.Max.Y;
@@ -195,7 +179,7 @@ public void SetFieldSize()
     }
     if (autoFieldSize)
     {
-        foreach (IMyGravityGenerator gen in allGens)
+        foreach (IMyGravityGenerator gen in gens)
         {
             var height = GetLengthToCorner(gen.Orientation.Up, fieldMax, fieldMin, gen.Position);
             var width = GetLengthToCorner(gen.Orientation.Left, fieldMax, fieldMin, gen.Position);
@@ -225,111 +209,69 @@ public void Clear()
     cockpit = null;
     cockpits.Clear();
     screen = null;
-    allGens.Clear();
-    allMasses.Clear();
+    gens.Clear();
+    masses.Clear();
     fieldMax = Vector3I.Zero;
     fieldMin = Vector3I.Zero;
-    for (int orientation = 0; orientation < 6; orientation++)
-    {
-        gens[orientation].Clear();
-    }
 }
-// check for blocks, important if user is stupid and forgets to recompile
 public void GetBlocks(bool clear = false)
 {
     if (clear) Clear();
-
     waitTillErrorFixed = false;
-    try
+
+    GridTerminalSystem.GetBlocksOfType(cockpits);
+    int maincockpitcount = 0;
+    foreach (IMyCockpit mainCockpit in cockpits)
     {
-        GridTerminalSystem.GetBlocksOfType(cockpits);
-        int maincockpitcount = 0;
-        foreach (IMyCockpit mainCockpit in cockpits)
+        if (mainCockpit.IsMainCockpit)
         {
-            if (mainCockpit.IsMainCockpit)
-            {
-                maincockpitcount++;
-                cockpit = mainCockpit;
-            }
+            maincockpitcount++;
+            cockpit = mainCockpit;
         }
-        if (cockpit == null)
-        {
-            Echo("No main cockpit was found, please add one.");
-            waitTillErrorFixed = true;
-            return;
-        }
-        if (maincockpitcount > 1)
-        {
-            Echo("More than 1 main cockpit was found, please make sure there is only 1.");
-            waitTillErrorFixed = true;
-            return;
-        }
+    }
+    if (cockpit == null)
+    {
+        Echo("No main cockpit was found.");
+        waitTillErrorFixed = true;
+    }
+    else if (maincockpitcount > 1)
+    {
+        Echo("More than 1 main cockpit were found.");
+        waitTillErrorFixed = true;
+    }
+    else
+    {
         screen = cockpit.GetSurface(0);
         screen.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-        screen.FontSize = 1.2f;
-    }
-    catch
-    {
-        Echo("No cockpit was found, please add one.");
-        waitTillErrorFixed = true;
-        return;
+        screen.FontSize = 1.4f;
     }
 
-    GridTerminalSystem.GetBlocksOfType(allMasses);
-    GridTerminalSystem.GetBlocksOfType(allGens);
+    GridTerminalSystem.GetBlocksOfType(masses);
+    GridTerminalSystem.GetBlocksOfType(gens);
 
-    // check if blocks are damaged and remove from list
-    for (int i = 0; i < allMasses.Count; i++)
+    for (int i = 0; i < masses.Count; i++)
     {
-        if (!allMasses[i].IsFunctional)
+        if (!masses[i].IsFunctional)
         {
-            allMasses.RemoveAt(i);
+            masses.RemoveAt(i);
         }
     }
-    for (int i = 0; i < allGens.Count; i++)
+    for (int i = 0; i < gens.Count; i++)
     {
-        if (!allGens[i].IsFunctional)
+        if (!gens[i].IsFunctional)
         {
-            allGens.RemoveAt(i);
+            gens.RemoveAt(i);
         }
     }
 
-    if (allGens.Count == 0)
+    if (gens.Count == 0)
     {
         Echo("No working gravity generators were found.");
         waitTillErrorFixed = true;
-        return;
     }
-    if (allMasses.Count == 0)
+    if (masses.Count == 0)
     {
         Echo("No working artificial masses were found.");
         waitTillErrorFixed = true;
-        return;
-    }
-
-    // sort gens into lists by orientation
-    for (int i = 0; i < allGens.Count; i++)
-    {
-        switch (cockpits[0].Orientation.TransformDirectionInverse(allGens[i].Orientation.Up))
-        {
-            case Base6Directions.Direction.Up:
-                gens[0].Add(allGens[i]);
-                break;
-            case Base6Directions.Direction.Down:
-                gens[1].Add(allGens[i]);
-                break;
-            case Base6Directions.Direction.Right:
-                gens[2].Add(allGens[i]);
-                break;
-            case Base6Directions.Direction.Left:
-                gens[3].Add(allGens[i]);
-                break;
-            case Base6Directions.Direction.Backward:
-                gens[4].Add(allGens[i]);
-                break;
-            case Base6Directions.Direction.Forward:
-                gens[5].Add(allGens[i]);
-                break;
-        }
     }
 }
