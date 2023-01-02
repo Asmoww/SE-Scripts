@@ -36,6 +36,7 @@ Vector3D moveInd = new Vector3D();
 Vector3D velVect = new Vector3D();
 double averageRuntime = 0;
 bool waitTillErrorFixed = false;
+bool idle = false;
 int tickNum = 0;
 
 public void Main(string argument, UpdateType updateSource)
@@ -126,9 +127,8 @@ public void Main(string argument, UpdateType updateSource)
 }
 public void PowerOnOff(bool power)
 {
-    // this uses a ton of runtime, don't turn off if using more than 70% of allowed ms
+    if (idle != power) return;
     if (power == false && (averageRuntime > maxMs * 0.7)) return;
-
     foreach (IMyArtificialMassBlock mass in masses)
     {
         mass.Enabled = power;
@@ -137,6 +137,7 @@ public void PowerOnOff(bool power)
     {
         gen.Enabled = power;
     }
+    idle = !power;
 }
 public bool NoPilotInput()
 {
@@ -231,12 +232,12 @@ public void GetBlocks(bool clear = false)
     }
     if (cockpit == null)
     {
-        Echo("No main cockpit was found.");
+        Echo("No main cockpit was found, please add one.");
         waitTillErrorFixed = true;
     }
     else if (maincockpitcount > 1)
     {
-        Echo("More than 1 main cockpit were found.");
+        Echo("More than 1 main cockpit was found, please make sure there is only 1.");
         waitTillErrorFixed = true;
     }
     else
