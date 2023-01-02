@@ -232,12 +232,12 @@ public void GetBlocks(bool clear = false)
     }
     if (cockpit == null)
     {
-        Echo("No main cockpit was found, please add one.");
+        Echo("No main cockpit was found.");
         waitTillErrorFixed = true;
     }
     else if (maincockpitcount > 1)
     {
-        Echo("More than 1 main cockpit was found, please make sure there is only 1.");
+        Echo("More than 1 main cockpit were found.");
         waitTillErrorFixed = true;
     }
     else
