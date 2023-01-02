@@ -15,7 +15,7 @@ int checkEveryTicks = 30;
 // if you want to use spherical gens, place an EQUAL AMOUNT BEHIND AND IN FRONT of the gravity drives
 // this way they will cancel out eachother, while still working as a shield, though they can still cause slight unwanted movement
 // 0 if not using, 1 if using
-int useSpherical = 1;
+int useSpherical = 0;
 // shield is toggled between modes with the argument "shield" or directly with "push", "pull" or "off"
 // --------------- settings ---------------
 
