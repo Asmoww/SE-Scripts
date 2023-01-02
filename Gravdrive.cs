@@ -12,6 +12,11 @@ bool autoFieldSize = true;
 // how often to check for changes in blocks such as damage
 // 60 ticks = second
 int checkEveryTicks = 30;
+// if you want to use spherical gens, place an EQUAL AMOUNT BEHIND AND IN FRONT of the gravity drives
+// this way they will cancel out eachother, while still working as a shield, though they can still cause slight unwanted movement
+// 0 if not using, 1 if using
+int useSpherical = 1;
+// shield is toggled between modes with the argument "shield" or directly with "push", "pull" or "off"
 // --------------- settings ---------------
 
 // no touchie below this point unless you know what you're doing ------------------------------------------------
@@ -19,14 +24,17 @@ int checkEveryTicks = 30;
 IMyCockpit cockpit;
 List<IMyCockpit> cockpits = new List<IMyCockpit>();
 List<IMyGravityGenerator> gens = new List<IMyGravityGenerator>();
+List<IMyGravityGeneratorSphere> spheres = new List<IMyGravityGeneratorSphere>();
 List<IMyArtificialMassBlock> masses = new List<IMyArtificialMassBlock>();
 IMyTextSurface screen;
 Vector3I fieldMax, fieldMin;
+Vector3D massCenterVector = new Vector3D();
+int shield = 0;
 
 public Program()
 {
     Echo("Loading...");
-    GetBlocks();
+    GetBlocks(false);
     SetFieldSize();
     Runtime.UpdateFrequency = UpdateFrequency.Update1;
     Echo("Loaded succesfully!");
@@ -38,9 +46,36 @@ double averageRuntime = 0;
 bool waitTillErrorFixed = false;
 bool idle = false;
 int tickNum = 0;
+string shieldString = "Off";
 
-public void Main(string argument, UpdateType updateSource)
+public void Main(string arg, UpdateType updateSource)
 {
+    if (arg == "shield" || arg == "push" || arg == "pull" || arg == "off")
+    {
+        if (arg == "shield") arg = shield.ToString();
+        switch (arg)
+        {
+            case "-1":
+            case "off":
+                shield = 0;
+                shieldString = "Off";
+                PowerOnOff(false, true);
+                break;
+            case "0":
+            case "pull":
+                shield = 1;
+                shieldString = "Pull";
+                PowerOnOff(true, true);
+                break;
+            case "1":
+            case "push":
+                shield = -1;
+                shieldString = "Push";
+                PowerOnOff(true, true);
+                break;
+        }
+    }
+
     averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs * 0.01);
     if (averageRuntime > maxMs * 0.9)
     {
@@ -58,8 +93,8 @@ public void Main(string argument, UpdateType updateSource)
     if (waitTillErrorFixed) return;
 
     screen.WriteText("");
-    Echo("Gravdrive");
-    Echo("Gravity generators: " + gens.Count.ToString());
+    Echo("Shield:\n" + shieldString);
+    Echo("Gravity generators: " + gens.Count.ToString() + " + " + spheres.Count.ToString() + "s");
     Echo("Artificial masses: " + masses.Count.ToString());
     Echo("Auto field size: " + autoFieldSize.ToString());
     Echo("Lowest speed: " + lowestSpeed.ToString());
@@ -67,6 +102,7 @@ public void Main(string argument, UpdateType updateSource)
     Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms");
     screen.WriteText("Efficiency: " + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%");
     screen.WriteText("\nRuntime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms\n", true);
+    screen.WriteText("Shield: " + shieldString + "\n", true);
 
     if (Math.Round(cockpit.GetShipSpeed(), 2) == 0 && NoPilotInput())
     {
@@ -105,28 +141,57 @@ public void Main(string argument, UpdateType updateSource)
         switch (cockpit.Orientation.TransformDirectionInverse(gen.Orientation.Up))
         {
             case Base6Directions.Direction.Up:
-                gen.GravityAcceleration = -GravAccerelation(moveInd.Y, -velVect.Y);
+                gen.GravityAcceleration = (float)-(moveInd.Y - velVect.Y);
                 break;
             case Base6Directions.Direction.Down:
-                gen.GravityAcceleration = GravAccerelation(moveInd.Y, -velVect.Y);
+                gen.GravityAcceleration = (float)(moveInd.Y - velVect.Y);
                 break;
             case Base6Directions.Direction.Right:
-                gen.GravityAcceleration = -GravAccerelation(moveInd.X, -velVect.X);
+                gen.GravityAcceleration = (float)-(moveInd.X - velVect.X);
                 break;
             case Base6Directions.Direction.Left:
-                gen.GravityAcceleration = GravAccerelation(moveInd.X, -velVect.X);
+                gen.GravityAcceleration = (float)(moveInd.X - velVect.X);
                 break;
             case Base6Directions.Direction.Backward:
-                gen.GravityAcceleration = -GravAccerelation(moveInd.Z, -velVect.Z);
+                gen.GravityAcceleration = (float)-(moveInd.Z - velVect.Z);
                 break;
             case Base6Directions.Direction.Forward:
-                gen.GravityAcceleration = GravAccerelation(moveInd.Z, -velVect.Z);
+                gen.GravityAcceleration = (float)(moveInd.Z - velVect.Z);
                 break;
         }
     }
+
+    foreach (IMyGravityGeneratorSphere sphere in spheres)
+    {
+        if (shield != 0)
+        {
+            sphere.GravityAcceleration = shield * 9.8f;
+        }
+        else
+        {
+            sphere.GravityAcceleration = (float)-((moveInd.Z - velVect.Z) * useSpherical * IsFrontOrBack(sphere));
+        }
+    }
 }
-public void PowerOnOff(bool power)
+public void PowerOnOff(bool power, bool shieldToggle = false)
 {
+    if (shieldToggle)
+    {
+        foreach (IMyGravityGeneratorSphere sphere in spheres)
+        {
+            if (power)
+            {
+                sphere.Radius = 400;
+                sphere.GravityAcceleration = shield * 9.8f;
+            }
+            else
+            {
+                SetFieldSize();
+                sphere.GravityAcceleration = shield * 0f;
+            }
+            sphere.Enabled = power;
+        }
+    }
     if (idle != power) return;
     if (power == false && (averageRuntime > maxMs * 0.7)) return;
     foreach (IMyArtificialMassBlock mass in masses)
@@ -137,15 +202,18 @@ public void PowerOnOff(bool power)
     {
         gen.Enabled = power;
     }
+    if (shield == 0)
+    {
+        foreach (IMyGravityGeneratorSphere sphere in spheres)
+        {
+            sphere.Enabled = power;
+        }
+    }
     idle = !power;
 }
 public bool NoPilotInput()
 {
     return cockpit.MoveIndicator.X == 0 && cockpit.MoveIndicator.Y == 0 && cockpit.MoveIndicator.Z == 0;
-}
-public float GravAccerelation(double LinCtrl, double velVec)
-{
-    return (float)(LinCtrl + velVec);
 }
 public int IsZero(float value)
 {
@@ -178,7 +246,7 @@ public void SetFieldSize()
             if (fieldMin.Z < mass.Min.Z) fieldMin.Z = mass.Min.Z;
         }
     }
-    if (autoFieldSize)
+    if (autoFieldSize && shield == 0)
     {
         foreach (IMyGravityGenerator gen in gens)
         {
@@ -186,6 +254,13 @@ public void SetFieldSize()
             var width = GetLengthToCorner(gen.Orientation.Left, fieldMax, fieldMin, gen.Position);
             var depth = GetLengthToCorner(gen.Orientation.Forward, fieldMax, fieldMin, gen.Position);
             gen.FieldSize = new Vector3(width * 5 + 3, height * 5 + 3, depth * 5 + 3);
+        }
+        foreach (IMyGravityGeneratorSphere sphere in spheres)
+        {
+            int highestLenght = (int)Math.Max(GetLengthToCorner(sphere.Orientation.Forward, fieldMax, fieldMin, sphere.Position),
+            Math.Max(GetLengthToCorner(sphere.Orientation.Left, fieldMax, fieldMin, sphere.Position),
+            GetLengthToCorner(sphere.Orientation.Up, fieldMax, fieldMin, sphere.Position)));
+            sphere.Radius = (float)(highestLenght * 3.5);
         }
     }
 }
@@ -202,7 +277,7 @@ public float GetLengthToCorner(Base6Directions.Direction orientation, Vector3I m
         case Base6Directions.Direction.Right:
         case Base6Directions.Direction.Left:
             return Math.Max(Math.Abs(max.X - pos.X), Math.Abs(min.X - pos.X));
-        default: throw new NullReferenceException("script brokie");
+        default: throw new NullReferenceException("script brokie (tylers fault)");
     }
 }
 public void Clear()
@@ -212,67 +287,101 @@ public void Clear()
     screen = null;
     gens.Clear();
     masses.Clear();
+    spheres.Clear();
     fieldMax = Vector3I.Zero;
     fieldMin = Vector3I.Zero;
+    massCenterVector = Vector3D.Zero;
 }
-public void GetBlocks(bool clear = false)
+public void GetBlocks(bool clear)
 {
     if (clear) Clear();
     waitTillErrorFixed = false;
 
     GridTerminalSystem.GetBlocksOfType(cockpits);
     int maincockpitcount = 0;
-    foreach (IMyCockpit mainCockpit in cockpits)
+    try
     {
-        if (mainCockpit.IsMainCockpit)
+        foreach (IMyCockpit mainCockpit in cockpits)
         {
-            maincockpitcount++;
-            cockpit = mainCockpit;
+            if (mainCockpit.IsMainCockpit)
+            {
+                maincockpitcount++;
+                cockpit = mainCockpit;
+            }
         }
+        if (maincockpitcount == 0)
+        {
+            Echo("No main cockpit was found.");
+            waitTillErrorFixed = true;
+        }
+        else if (maincockpitcount > 1)
+        {
+            Echo("More than 1 main cockpit were found.");
+            waitTillErrorFixed = true;
+        }
+        else
+        {
+            screen = cockpit.GetSurface(0);
+            screen.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+            screen.FontSize = 1.4f;
+        }
+
+        if (useSpherical != 0) GridTerminalSystem.GetBlocksOfType(spheres);
+        GridTerminalSystem.GetBlocksOfType(masses);
+        GridTerminalSystem.GetBlocksOfType(gens);
+
+        for (int i = 0; i < masses.Count; i++)
+        {
+            if (!masses[i].IsFunctional)
+            {
+                masses.RemoveAt(i);
+            }
+        }
+        for (int i = 0; i < gens.Count; i++)
+        {
+            if (!gens[i].IsFunctional)
+            {
+                gens.RemoveAt(i);
+            }
+        }
+        for (int i = 0; i < spheres.Count; i++)
+        {
+            if (!spheres[i].IsFunctional)
+            {
+                spheres.RemoveAt(i);
+            }
+        }
+
+        if (gens.Count == 0)
+        {
+            Echo("No working gravity generators were found.");
+            waitTillErrorFixed = true;
+        }
+        if (masses.Count == 0)
+        {
+            Echo("No working artificial masses were found.");
+            waitTillErrorFixed = true;
+        }
+        foreach (IMyArtificialMassBlock mass in masses)
+        {
+            massCenterVector += -Vector3D.TransformNormal(mass.GetPosition() - cockpit.CenterOfMass, MatrixD.Transpose(cockpit.WorldMatrix));
+        }
+        massCenterVector /= masses.Count;
     }
-    if (cockpit == null)
+    catch
     {
-        Echo("No main cockpit was found.");
+        Echo("Fix the above errors to continue.");
         waitTillErrorFixed = true;
     }
-    else if (maincockpitcount > 1)
+}
+public int IsFrontOrBack(IMyGravityGeneratorSphere sphere)
+{
+    if ((-Vector3D.TransformNormal(sphere.GetPosition() - cockpit.CenterOfMass, MatrixD.Transpose(cockpit.WorldMatrix))).Z > massCenterVector.Z)
     {
-        Echo("More than 1 main cockpit were found.");
-        waitTillErrorFixed = true;
+        return 1;
     }
     else
     {
-        screen = cockpit.GetSurface(0);
-        screen.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-        screen.FontSize = 1.4f;
-    }
-
-    GridTerminalSystem.GetBlocksOfType(masses);
-    GridTerminalSystem.GetBlocksOfType(gens);
-
-    for (int i = 0; i < masses.Count; i++)
-    {
-        if (!masses[i].IsFunctional)
-        {
-            masses.RemoveAt(i);
-        }
-    }
-    for (int i = 0; i < gens.Count; i++)
-    {
-        if (!gens[i].IsFunctional)
-        {
-            gens.RemoveAt(i);
-        }
-    }
-
-    if (gens.Count == 0)
-    {
-        Echo("No working gravity generators were found.");
-        waitTillErrorFixed = true;
-    }
-    if (masses.Count == 0)
-    {
-        Echo("No working artificial masses were found.");
-        waitTillErrorFixed = true;
+        return -1;
     }
 }
