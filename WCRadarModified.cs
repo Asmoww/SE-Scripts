@@ -46,7 +46,7 @@
         const string INI_SECTION_TEXT_SURF_PROVIDER = "Text Surface Config";
         const string INI_TEXT_SURFACE_TEMPLATE = "Show on screen";
 
-        float rangeOverride = 6000;
+        float rangeOverride = 7000;
         bool useRangeOverride = true;
         bool showAsteroids = false;
         bool drawQuadrants = false;
@@ -383,8 +383,8 @@
                 targetDataDict[item.Key] = item.Value;
         }
 
-        List<Output> targetOutput = new List<Output>();
-        List<Output> friendOutput = new List<Output>();
+        Dictionary<Output, double> targetOutput = new Dictionary<Output, double>();
+        Dictionary<Output, double> friendOutput = new Dictionary<Output, double>();
 
         void TargetLCD()
         {           
@@ -424,17 +424,20 @@
                     }
                     if (target.MyTarget)
                     {
-                        targetOutput.Insert(0, new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color));
+                        targetOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), 0);
                     }
                     else
                     {
                         if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
                         {
-                            targetOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color));
+                            targetOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), target.Distance);
                         }
                         else
                         {
-                            friendOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color));
+                            if (target.Info.Type != MyDetectedEntityType.CharacterHuman)
+                            {
+                                friendOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), target.Distance);
+                            }
                         }
                     }
                 }
@@ -973,19 +976,20 @@
             }
         }
 
-        void WriteLcd(List<Output> outputList, List<IMyTextSurface> lcdList)
+        void WriteLcd(Dictionary<Output, double> outputDict, List<IMyTextSurface> lcdList)
         {
-            foreach(IMyTextSurface lcd in lcdList)
+            var sortedDict = from entry in outputDict orderby entry.Value ascending select entry;
+            foreach (IMyTextSurface lcd in lcdList)
             {
-                foreach (Output output in outputList)
+                foreach (KeyValuePair<Output, double> output in sortedDict)
                 {
-                    if(output.Text.Length > 30)
+                    if(output.Key.Text.Length > 30)
                     {
-                        lcd.WriteText(output.Text.Substring(0, 30) + "...\n", true);
+                        lcd.WriteText(output.Key.Text.Substring(0, 30) + "...\n", true);
                     }
                     else
                     {
-                        lcd.WriteText(output.Text + "\n", true);
+                        lcd.WriteText(output.Key.Text + "\n", true);
                     }
                 }
             }
