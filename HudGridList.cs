@@ -2,6 +2,8 @@
 //meant to work with hudlcd plugin
 //name LCDs "Friend LCD" and "Target LCD"
 double maxMs = 0.4;
+//sort by threat if disabled
+bool sortByDistance = false;
 Color friendColor = Color.LimeGreen;
 Color neutralColor = Color.LightBlue;
 Color enemyColor = Color.Red;
@@ -106,6 +108,7 @@ void TargetLCD()
         try
         {
             var target = obj.Value;
+            double sorter = target.Threat;
             string type;
             switch (target.Info.Type)
             {
@@ -124,19 +127,21 @@ void TargetLCD()
             }
             if (target.MyTarget)
             {
-                targetOutput.Add(new Output("@ "+type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), myTargetColor), 0);
+                targetOutput.Add(new Output("@ "+type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), myTargetColor), 20);
             }
             else
             {
+                if (sortByDistance)
+                    sorter = target.Distance;
                 if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
                 {
-                    targetOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), target.Distance);
+                    targetOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
                 }
                 else
                 {
                     if (target.Info.Type != MyDetectedEntityType.CharacterHuman)
                     {
-                        friendOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), target.Distance);
+                        friendOutput.Add(new Output(Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
                     }
                 }
             }
@@ -161,8 +166,14 @@ void ClearLcd()
 
 void WriteLcd(Dictionary<Output, double> outputDict, List<IMyTextSurface> lcdList)
 {
-    var sortedDict = from entry in outputDict orderby entry.Value ascending select entry;
-    
+
+    IOrderedEnumerable<KeyValuePair<Output, double>> sortedDict;
+
+    if(sortByDistance)
+        sortedDict = from entry in outputDict orderby entry.Value ascending select entry;
+    else
+        sortedDict = from entry in outputDict orderby entry.Value descending select entry;
+
     foreach (IMyTextSurface lcd in lcdList)
     {
         foreach (KeyValuePair<Output, double> output in sortedDict)
