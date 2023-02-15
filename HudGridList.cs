@@ -280,18 +280,18 @@ void GetBlocks()
     GridTerminalSystem.GetBlocksOfType(allLCDs);
     foreach (IMyTextPanel lcd in allLCDs)
     {
-        if (lcd.CustomName == "Friend LCD")
-        {
-            lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-            lcd.BackgroundColor = Color.Black;
-            friendLCDs.Add(lcd);
-        }
-        else if(lcd.CustomName == "Target LCD")
-        {
-            lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-            lcd.BackgroundColor = Color.Black;
-            targetLCDs.Add(lcd);
-        }
+        if (lcd.CustomName.Contains("Friend"))
+                {
+                    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+                    lcd.BackgroundColor = Color.Black;
+                    friendLCDs.Add(lcd);
+                }
+                else if(lcd.CustomName.Contains("Target"))
+                {
+                    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+                    lcd.BackgroundColor = Color.Black;
+                    targetLCDs.Add(lcd);
+                }
     }
 }
 public class WcPbApi
