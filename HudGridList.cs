@@ -2,6 +2,11 @@
 //meant to work with hudlcd plugin
 //name LCDs "Friend LCD" and "Target LCD"
 double maxMs = 0.4;
+Color friendColor = Color.LimeGreen;
+Color neutralColor = Color.LightBlue;
+Color enemyColor = Color.Red;
+Color targetingColor = Color.Orange;
+Color myTargetColor = Color.DarkRed;
 
 public static WcPbApi wcapi = new WcPbApi();
 Dictionary<MyDetectedEntityInfo, float> wcTargets = new Dictionary<MyDetectedEntityInfo, float>();
@@ -119,7 +124,7 @@ void TargetLCD()
             }
             if (target.MyTarget)
             {
-                targetOutput.Add(new Output("@ "+type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), 0);
+                targetOutput.Add(new Output("@ "+type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), myTargetColor), 0);
             }
             else
             {
@@ -222,27 +227,27 @@ void GetAllTargets()
         switch (targetData.Info.Relationship)
         {
             case MyRelationsBetweenPlayerAndBlock.Enemies:
-                targetData.Color = Color.Red;
+                targetData.Color = enemyColor;
                 if (Me.CubeGrid.EntityId == targetData.Targeting)
                 {
-                    targetData.Color = Color.Orange;
+                    targetData.Color = targetingColor;
                 }
                 break;
 
             case MyRelationsBetweenPlayerAndBlock.Owner:
             case MyRelationsBetweenPlayerAndBlock.FactionShare:
-            case MyRelationsBetweenPlayerAndBlock.Friends:                       
-                targetData.Color = Color.Green;
+            case MyRelationsBetweenPlayerAndBlock.Friends:
+                targetData.Color = friendColor;
                 break;
             case MyRelationsBetweenPlayerAndBlock.Neutral:
-                targetData.Color = Color.LightBlue;
+                targetData.Color = neutralColor;
                 break;
 
             default:
                 targetData.Threat = -1;
                 if (targetData.Info.Type == MyDetectedEntityType.Unknown)
                 {
-                    targetData.Color = Color.Lime;
+                    targetData.Color = friendColor;
                 }
                 break;
         }
@@ -281,17 +286,17 @@ void GetBlocks()
     foreach (IMyTextPanel lcd in allLCDs)
     {
         if (lcd.CustomName.Contains("Friend"))
-                {
-                    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-                    lcd.BackgroundColor = Color.Black;
-                    friendLCDs.Add(lcd);
-                }
-                else if(lcd.CustomName.Contains("Target"))
-                {
-                    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-                    lcd.BackgroundColor = Color.Black;
-                    targetLCDs.Add(lcd);
-                }
+        {
+            lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+            lcd.BackgroundColor = Color.Black;
+            friendLCDs.Add(lcd);
+        }
+        else if(lcd.CustomName.Contains("Target"))
+        {
+            lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+            lcd.BackgroundColor = Color.Black;
+            targetLCDs.Add(lcd);
+        }
     }
 }
 public class WcPbApi
