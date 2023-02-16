@@ -5,7 +5,7 @@ double maxMs = 0.4;
 bool sortByDistance = true; //sort by threat if disabled 
 bool approachWarning = true; //warn for approaching grids
 bool approachSound = false; //use sound block for warning if available
-int approachDistance = 1200; //distance in meters, warn if grid is approaching in specified distance
+int approachDistance = 1500; //distance in meters, warn if grid is approaching in specified distance
 int approachSpeed = 5; //speed in m/s, if approaching faster, warn
 Color friendColor = Color.LimeGreen;
 Color neutralColor = Color.LightBlue;
@@ -158,7 +158,7 @@ void TargetLCD()
                 Color targetColor = myTargetColor;
                 if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Neutral)
                     targetColor = neutralColor;
-                if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies && target.Color == approachColor)
+                if (warning == "!! ")
                     targetColor = targetingMyTargetColor;
 
                 targetOutput.Add(new Output("@ " + warning + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), targetColor), myTargetPriority);
@@ -171,10 +171,10 @@ void TargetLCD()
                 }
                 else
                 {
-                    if (target.Info.Type != MyDetectedEntityType.CharacterHuman)
-                    {
-                        friendOutput.Add(new Output(Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
-                    }
+                    string friendlyType = "";
+                    if (target.Info.Name.ToString() == "")
+                        friendlyType = "Suit";
+                    friendOutput.Add(new Output(Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
                 }
             }
         }
