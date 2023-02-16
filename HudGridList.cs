@@ -6,13 +6,14 @@ bool sortByDistance = true; //sort by threat if disabled
 bool approachWarning = true; //warn for approaching grids
 bool approachSound = true; //use sound block for warning if available
 int approachDistance = 1200; //distance in meters, warn if grid is approaching in specified distance
-int approachSpeed = 10; //speed in m/s, if approaching faster, warn
+int approachSpeed = 5; //speed in m/s, if approaching faster, warn
 Color friendColor = Color.LimeGreen;
 Color neutralColor = Color.LightBlue;
 Color enemyColor = Color.Red;
 Color approachColor = Color.Yellow;
 Color targetingColor = Color.Orange;
 Color myTargetColor = Color.DarkRed;
+Color targetingMyTargetColor = Color.DarkOrange;
 
 public static WcPbApi wcapi = new WcPbApi();
 Dictionary<MyDetectedEntityInfo, float> wcTargets = new Dictionary<MyDetectedEntityInfo, float>();
@@ -67,8 +68,8 @@ public void Main(string argument, UpdateType updateSource)
     tickNum++;
     averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
     Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
-    Echo((friendLCDs.Count + targetLCDs.Count).ToString()+" LCDs.");
-    switch(sortByDistance)
+    Echo((friendLCDs.Count + targetLCDs.Count).ToString() + " LCDs.");
+    switch (sortByDistance)
     {
         case true:
             Echo("Sorting by distance.");
@@ -86,7 +87,7 @@ public void Main(string argument, UpdateType updateSource)
     {
         return;
     }
-    if (targetLCDs.Count+friendLCDs.Count>0)
+    if (targetLCDs.Count + friendLCDs.Count > 0)
     {
         GetAllTargets();
         TargetLCD();
@@ -151,14 +152,16 @@ void TargetLCD()
                 warning = "!! ";
             if (target.Color == targetingColor)
                 warning = "! ";
-            
+
             if (target.MyTarget)
             {
                 Color targetColor = myTargetColor;
                 if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Neutral)
                     targetColor = neutralColor;
-                    
-                targetOutput.Add(new Output("@ " + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), targetColor), myTargetPriority);
+                if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies && target.Color == approachColor)
+                    targetColor = targetingMyTargetColor;
+
+                targetOutput.Add(new Output("@ " + warning + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), targetColor), myTargetPriority);
             }
             else
             {
@@ -268,8 +271,8 @@ void GetAllTargets()
         {
             targetData.Distance = Vector3D.Distance(targetData.Info.Position, Me.CubeGrid.GetPosition());
         }
-        if(prevDistances.ContainsKey(targetData.Info.EntityId))
-            targetData.ApproachSpeed = (prevDistances[targetData.Info.EntityId] - targetData.Distance)/tickSpeed;
+        if (prevDistances.ContainsKey(targetData.Info.EntityId))
+            targetData.ApproachSpeed = (prevDistances[targetData.Info.EntityId] - targetData.Distance) / tickSpeed;
 
         targetData.Color = Color.White;
 
@@ -286,7 +289,7 @@ void GetAllTargets()
                 {
                     targetData.Color = approachColor;
                     approaching = true;
-                    if (!soundPlayed && soundblocks.Count>0 && approachSound)
+                    if (!soundPlayed && soundblocks.Count > 0 && approachSound)
                     {
                         soundPlayed = true;
                         soundblocks[0].Enabled = true;
@@ -359,7 +362,7 @@ void GetBlocks()
     cockpits.Clear();
     GridTerminalSystem.GetBlocksOfType(allLCDs);
     GridTerminalSystem.GetBlocksOfType(cockpits);
-    GridTerminalSystem.GetBlocksOfType(soundblocks);  
+    GridTerminalSystem.GetBlocksOfType(soundblocks);
     foreach (IMyTextPanel lcd in allLCDs)
     {
         if (lcd.CustomName.Contains("Friend") && lcd.IsSameConstructAs(Me))
