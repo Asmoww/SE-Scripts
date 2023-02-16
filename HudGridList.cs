@@ -289,6 +289,7 @@ void GetAllTargets()
                     if (!soundPlayed && soundblocks.Count>0 && approachSound)
                     {
                         soundPlayed = true;
+                        soundblocks[0].Enabled = true;
                         soundblocks[0].SelectedSound = "Subnautica Caution";
                         soundblocks[0].LoopPeriod = 1800;
                         soundblocks[0].Play();
@@ -358,8 +359,7 @@ void GetBlocks()
     cockpits.Clear();
     GridTerminalSystem.GetBlocksOfType(allLCDs);
     GridTerminalSystem.GetBlocksOfType(cockpits);
-    GridTerminalSystem.GetBlocksOfType(soundblocks);
-    soundblocks[0].Enabled = true;
+    GridTerminalSystem.GetBlocksOfType(soundblocks);  
     foreach (IMyTextPanel lcd in allLCDs)
     {
         if (lcd.CustomName.Contains("Friend") && lcd.IsSameConstructAs(Me))
