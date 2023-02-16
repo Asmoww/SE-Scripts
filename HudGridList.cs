@@ -4,7 +4,7 @@
 double maxMs = 0.4;
 bool sortByDistance = true; //sort by threat if disabled 
 bool approachWarning = true; //warn for approaching grids
-bool approachSound = true; //use sound block for warning if available
+bool approachSound = false; //use sound block for warning if available
 int approachDistance = 1200; //distance in meters, warn if grid is approaching in specified distance
 int approachSpeed = 5; //speed in m/s, if approaching faster, warn
 Color friendColor = Color.LimeGreen;
