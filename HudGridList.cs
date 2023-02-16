@@ -174,7 +174,7 @@ void TargetLCD()
                     string friendlyType = "";
                     if (target.Info.Name.ToString() == "")
                         friendlyType = "Suit";
-                    friendOutput.Add(new Output(Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
+                    friendOutput.Add(new Output(Math.Round(target.Distance / 1000, 2).ToString() + "km "+ friendlyType + target.Info.Name.ToString(), target.Color), sorter);
                 }
             }
         }
