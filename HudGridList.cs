@@ -67,7 +67,7 @@ public void Main(string argument, UpdateType updateSource)
     tickNum++;
     averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
     Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
-    Echo("LCDs: " + (friendLCDs.Count + targetLCDs.Count).ToString());
+    Echo((friendLCDs.Count + targetLCDs.Count).ToString()+" LCDs.");
     switch(sortByDistance)
     {
         case true:
