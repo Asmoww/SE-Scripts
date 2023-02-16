@@ -2,11 +2,15 @@
 //meant to work with hudlcd plugin
 //name LCDs "Friend LCD" and "Target LCD"
 double maxMs = 0.4;
-//sort by threat if disabled
-bool sortByDistance = false;
+bool sortByDistance = true; //sort by threat if disabled 
+bool approachWarning = true; //warn for approaching grids
+bool approachSound = true; //use sound block for warning if available
+int approachDistance = 1200; //distance in meters, warn if grid is approaching in specified distance
+int approachSpeed = 10; //speed in m/s, if approaching faster, warn
 Color friendColor = Color.LimeGreen;
 Color neutralColor = Color.LightBlue;
 Color enemyColor = Color.Red;
+Color approachColor = Color.Yellow;
 Color targetingColor = Color.Orange;
 Color myTargetColor = Color.DarkRed;
 
@@ -14,9 +18,13 @@ public static WcPbApi wcapi = new WcPbApi();
 Dictionary<MyDetectedEntityInfo, float> wcTargets = new Dictionary<MyDetectedEntityInfo, float>();
 List<MyDetectedEntityInfo> wcObstructions = new List<MyDetectedEntityInfo>();
 Dictionary<long, TargetData> targetDataDict = new Dictionary<long, TargetData>();
+Dictionary<long, double> prevDistances = new Dictionary<long, double>();
 static MyDetectedEntityInfo currentTarget;
+bool approaching = false;
+bool soundPlayed = false;
 int tickNum = 0;
 double averageRuntime = 0;
+static double tickSpeed = 0.1667; //seconds per tick
 
 struct TargetData
 {
@@ -24,15 +32,17 @@ struct TargetData
     public long Targeting;
     public bool MyTarget;
     public double Distance;
+    public double ApproachSpeed;
     public float Threat;
     public Color Color;
 
-    public TargetData(MyDetectedEntityInfo info, long targeting = 0, bool myTarget = false, double distance = 0, float threat = 0, Color color = default(Color))
+    public TargetData(MyDetectedEntityInfo info, long targeting = 0, bool myTarget = false, double distance = 0, double approachSpeed = 0, float threat = 0, Color color = default(Color))
     {
         Info = info;
         Targeting = targeting;
         MyTarget = myTarget;
         Distance = distance;
+        ApproachSpeed = approachSpeed;
         Threat = threat;
         Color = color;
     }
@@ -55,22 +65,31 @@ public Program()
 public void Main(string argument, UpdateType updateSource)
 {
     tickNum++;
-    averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs/10 * 0.01);
+    averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
     Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
-    Echo("LCDs: "+(friendLCDs.Count + targetLCDs.Count).ToString());
-    if (averageRuntime > maxMs * 0.9)
+    Echo("LCDs: " + (friendLCDs.Count + targetLCDs.Count).ToString());
+    switch(sortByDistance)
     {
-        return;
-    }
-    if (targetLCDs != null && friendLCDs != null)
-    {
-        GetAllTargets();
-        TargetLCD();
+        case true:
+            Echo("Sorting by distance.");
+            break;
+        case false:
+            Echo("Sorting by threat level.");
+            break;
     }
     if (tickNum == 10)
     {
         GetBlocks();
         tickNum = 0;
+    }
+    if (averageRuntime > maxMs * 0.9)
+    {
+        return;
+    }
+    if (targetLCDs.Count+friendLCDs.Count>0)
+    {
+        GetAllTargets();
+        TargetLCD();
     }
 }
 
@@ -90,16 +109,12 @@ Dictionary<Output, double> targetOutput = new Dictionary<Output, double>();
 Dictionary<Output, double> friendOutput = new Dictionary<Output, double>();
 
 static List<IMyTextPanel> allLCDs = new List<IMyTextPanel>();
-
 static List<IMyTextSurface> targetLCDs = new List<IMyTextSurface>();
-
 static List<IMyTextSurface> friendLCDs = new List<IMyTextSurface>();
 
 void TargetLCD()
 {
-
     ClearLcd();
-
     targetOutput.Clear();
     friendOutput.Clear();
 
@@ -109,7 +124,9 @@ void TargetLCD()
         {
             var target = obj.Value;
             double sorter = target.Threat;
+            int myTargetPriority = 100;
             string type;
+            string warning = "";
             switch (target.Info.Type)
             {
                 case MyDetectedEntityType.CharacterHuman:
@@ -125,17 +142,29 @@ void TargetLCD()
                     type = "";
                     break;
             }
+            if (sortByDistance)
+            {
+                sorter = target.Distance;
+                myTargetPriority = -1;
+            }
+            if (target.Color == approachColor)
+                warning = "!! ";
+            if (target.Color == targetingColor)
+                warning = "! ";
+            
             if (target.MyTarget)
             {
-                targetOutput.Add(new Output("@ "+type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), myTargetColor), 20);
+                Color targetColor = myTargetColor;
+                if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Neutral)
+                    targetColor = neutralColor;
+                    
+                targetOutput.Add(new Output("@ " + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), targetColor), myTargetPriority);
             }
             else
             {
-                if (sortByDistance)
-                    sorter = target.Distance;
                 if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
                 {
-                    targetOutput.Add(new Output(type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
+                    targetOutput.Add(new Output(warning + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
                 }
                 else
                 {
@@ -166,10 +195,9 @@ void ClearLcd()
 
 void WriteLcd(Dictionary<Output, double> outputDict, List<IMyTextSurface> lcdList)
 {
-
     IOrderedEnumerable<KeyValuePair<Output, double>> sortedDict;
 
-    if(sortByDistance)
+    if (sortByDistance)
         sortedDict = from entry in outputDict orderby entry.Value ascending select entry;
     else
         sortedDict = from entry in outputDict orderby entry.Value descending select entry;
@@ -178,25 +206,25 @@ void WriteLcd(Dictionary<Output, double> outputDict, List<IMyTextSurface> lcdLis
     {
         foreach (KeyValuePair<Output, double> output in sortedDict)
         {
-            if (output.Key.Text.Length > 30)
+            if (output.Key.Text.Length > 33)
             {
                 lcd.WriteText(ColorToColor(output.Key.Color) + output.Key.Text.Substring(0, 30) + "...\n", true);
             }
             else
             {
-                lcd.WriteText(ColorToColor(output.Key.Color)+output.Key.Text + "\n", true);
+                lcd.WriteText(ColorToColor(output.Key.Color) + output.Key.Text + "\n", true);
             }
         }
     }
 }
-
 string ColorToColor(Color color)
 {
-    return $"<color={color.R.ToString()},{color.G.ToString()},{color.B.ToString()},{color.A.ToString()}>";
+    return $"<color={color.R},{color.G},{color.B},{color.A}>";
 }
 Color SuitColor(Color orig) => Color.Lerp(orig, Color.Yellow, 0.5f);
 void GetAllTargets()
 {
+    approaching = false;
     targetDataDict.Clear();
     wcTargets.Clear();
     wcObstructions.Clear();
@@ -232,13 +260,40 @@ void GetAllTargets()
             t = wcapi.GetAiFocus(targetData.Info.EntityId, 0);
         if (t.HasValue && t.Value.EntityId != 0)
             targetData.Targeting = t.Value.EntityId;
-        targetData.Distance = Vector3D.Distance(targetData.Info.Position, Me.CubeGrid.GetPosition());
+        try
+        {
+            targetData.Distance = Vector3D.Distance(targetData.Info.Position, cockpits[0].CenterOfMass);
+        }
+        catch
+        {
+            targetData.Distance = Vector3D.Distance(targetData.Info.Position, Me.CubeGrid.GetPosition());
+        }
+        if(prevDistances.ContainsKey(targetData.Info.EntityId))
+            targetData.ApproachSpeed = (prevDistances[targetData.Info.EntityId] - targetData.Distance)/tickSpeed;
 
         targetData.Color = Color.White;
+
+        if (!currentTarget.IsEmpty() && kvp.Key == currentTarget.EntityId)
+        {
+            targetData.MyTarget = true;
+        }
+
         switch (targetData.Info.Relationship)
         {
             case MyRelationsBetweenPlayerAndBlock.Enemies:
                 targetData.Color = enemyColor;
+                if (approachWarning && targetData.Distance < approachDistance && targetData.ApproachSpeed > approachSpeed && targetData.MyTarget == false && targetData.Info.Type != MyDetectedEntityType.CharacterHuman)
+                {
+                    targetData.Color = approachColor;
+                    approaching = true;
+                    if (!soundPlayed && soundblocks.Count>0 && approachSound)
+                    {
+                        soundPlayed = true;
+                        soundblocks[0].SelectedSound = "Subnautica Caution";
+                        soundblocks[0].LoopPeriod = 1800;
+                        soundblocks[0].Play();
+                    }
+                }
                 if (Me.CubeGrid.EntityId == targetData.Targeting)
                 {
                     targetData.Color = targetingColor;
@@ -268,17 +323,19 @@ void GetAllTargets()
             targetData.Color = SuitColor(targetData.Color);
         }
 
-        if (!currentTarget.IsEmpty() && kvp.Key == currentTarget.EntityId)
-        {
-            targetData.MyTarget = true;
-        }
-      
         temp[targetData.Info.EntityId] = targetData;
     }
 
     targetDataDict.Clear();
     foreach (var item in temp)
         targetDataDict[item.Key] = item.Value;
+    foreach (var item in targetDataDict)
+        prevDistances[item.Key] = item.Value.Distance;
+    if (!approaching && soundblocks.Count > 0 && approachSound)
+    {
+        soundblocks[0].Stop();
+        soundPlayed = false;
+    }
 }
 void AddTargetData(MyDetectedEntityInfo targetInfo, float threat = 0f)
 {
@@ -289,20 +346,29 @@ void AddTargetData(MyDetectedEntityInfo targetInfo, float threat = 0f)
         targetDataDict[targetInfo.EntityId] = targetData;
     }
 }
+
+List<IMyCockpit> cockpits = new List<IMyCockpit>();
+List<IMySoundBlock> soundblocks = new List<IMySoundBlock>();
+
 void GetBlocks()
 {
+    allLCDs.Clear();
     friendLCDs.Clear();
     targetLCDs.Clear();
+    cockpits.Clear();
     GridTerminalSystem.GetBlocksOfType(allLCDs);
+    GridTerminalSystem.GetBlocksOfType(cockpits);
+    GridTerminalSystem.GetBlocksOfType(soundblocks);
+    soundblocks[0].Enabled = true;
     foreach (IMyTextPanel lcd in allLCDs)
     {
-        if (lcd.CustomName.Contains("Friend"))
+        if (lcd.CustomName.Contains("Friend") && lcd.IsSameConstructAs(Me))
         {
             lcd.ContentType = ContentType.TEXT_AND_IMAGE;
             lcd.BackgroundColor = Color.Black;
             friendLCDs.Add(lcd);
         }
-        else if(lcd.CustomName.Contains("Target"))
+        else if (lcd.CustomName.Contains("Target") && lcd.IsSameConstructAs(Me))
         {
             lcd.ContentType = ContentType.TEXT_AND_IMAGE;
             lcd.BackgroundColor = Color.Black;
