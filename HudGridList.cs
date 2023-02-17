@@ -1,6 +1,7 @@
 //Lists nearby grids to LCDs, takes info from weaponcore api
 //meant to work with hudlcd plugin
 //name LCDs "Friend LCD" and "Target LCD"
+//--Asmoww
 double maxMs = 0.4;
 bool sortByDistance = true; //sort by threat if disabled 
 bool approachWarning = true; //warn for approaching grids (changes color to yellow in list)
@@ -14,6 +15,8 @@ Color approachColor = Color.Yellow;
 Color targetingColor = Color.Orange;
 Color myTargetColor = Color.DarkRed;
 Color targetingMyTargetColor = Color.DarkOrange;
+
+// ------------------- Do not edit below unless you know what you're doing!!! -------------------
 
 public static WcPbApi wcapi = new WcPbApi();
 Dictionary<MyDetectedEntityInfo, float> wcTargets = new Dictionary<MyDetectedEntityInfo, float>();
