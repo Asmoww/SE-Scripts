@@ -3,7 +3,7 @@
 //name LCDs "Friend LCD" and "Target LCD"
 double maxMs = 0.4;
 bool sortByDistance = true; //sort by threat if disabled 
-bool approachWarning = true; //warn for approaching grids
+bool approachWarning = true; //warn for approaching grids (changes color to yellow in list)
 bool approachSound = false; //use sound block for warning if available
 int approachDistance = 1500; //distance in meters, warn if grid is approaching in specified distance
 int approachSpeed = 5; //speed in m/s, if approaching faster, warn
