@@ -2,6 +2,8 @@ import numpy
 from numpy import sqrt, dot, cross                       
 from numpy.linalg import norm     
 
+# This is Python - NOT FOR PROGRAMMABLE BLOCKS
+
 # Get location from 3 known gps points and their distance from observation point
 # Enter distance with highest possible accuracy, usually with one decimal
 # The script will return 2 locations, either of which could be the right one
