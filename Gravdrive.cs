@@ -352,7 +352,7 @@ public void GetBlocks(bool clear)
             }
         }
 
-        if (gens.Count == 0 && sphere.Count == 0)
+        if (gens.Count == 0 && spheres.Count == 0)
         {
             Echo("No working gravity generators were found.");
             waitTillErrorFixed = true;
