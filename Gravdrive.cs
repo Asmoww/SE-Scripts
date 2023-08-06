@@ -394,7 +394,7 @@
 
                 foreach (IMyTextPanel lcdd in allLCDs)
                 {
-                    if (lcdd.CustomName.Contains("Gdrive") && lcdd.IsSameConstructAs(Me))
+                    if (lcdd.CustomName.ToLower().Contains("gdrive") && lcdd.IsSameConstructAs(Me))
                     {
                         lcdd.ContentType = ContentType.TEXT_AND_IMAGE;
                         lcdd.BackgroundColor = Color.Black;
