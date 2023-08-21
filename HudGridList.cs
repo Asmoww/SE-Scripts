@@ -1,21 +1,21 @@
+
         //Lists nearby grids to LCDs, takes info from weaponcore api
         //meant to work with hudlcd plugin
         //name LCDs "Friend LCD" and "Target LCD"
         //--Asmoww
         double maxMs = 0.4;
         bool sortByDistance = true; //sort by threat if disabled 
-        bool approachWarning = true; //warn for approaching grids (changes color to yellow in list)
+        int closeDistance = 5000; //at what distance should colors start be applied to distance number
+        bool approachWarning = true; //warn for approaching grids with sound block
         int approachDistance = 1500; //distance in meters, warn if grid is approaching in specified distance
         int approachSpeed = 3; //speed in m/s, if approaching faster, warn
-        bool approachSound = true; //use sound block for warning if available
-        string warningSound = "Subnautica Caution"; // "SoundBlockAlert2" is also decent
-        Color friendColor = Color.LimeGreen;
+        string warningSound = "SoundBlockAlert2";
+        int maxNameLenght = 25; //how long grid names are allowed to be displayed without cutting them off
+        Color friendColor = Color.Green;
         Color neutralColor = Color.LightBlue;
-        Color enemyColor = Color.Red;
+        Color enemyColor = Color.IndianRed;
         Color approachColor = Color.Yellow;
         Color targetingColor = Color.Orange;
-        Color myTargetColor = Color.DarkRed;
-        Color targetingMyTargetColor = Color.DarkOrange;
 
         public static WcPbApi wcapi = new WcPbApi();
         Dictionary<MyDetectedEntityInfo, float> wcTargets = new Dictionary<MyDetectedEntityInfo, float>();
@@ -38,8 +38,9 @@
             public double ApproachSpeed;
             public float Threat;
             public Color Color;
+            public Color DistanceColor;
 
-            public TargetData(MyDetectedEntityInfo info, long targeting = 0, bool myTarget = false, double distance = 0, double approachSpeed = 0, float threat = 0, Color color = default(Color))
+            public TargetData(MyDetectedEntityInfo info, long targeting = 0, bool myTarget = false, double distance = 0, double approachSpeed = 0, float threat = 0, Color color = default(Color), Color distanceColor = default(Color))
             {
                 Info = info;
                 Targeting = targeting;
@@ -48,6 +49,7 @@
                 ApproachSpeed = approachSpeed;
                 Threat = threat;
                 Color = color;
+                DistanceColor = distanceColor;
             }
         }
 
@@ -70,14 +72,14 @@
             tickNum++;
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
             Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
-            Echo((friendLCDs.Count + targetLCDs.Count).ToString() + " LCDs.");
+            Echo((friendLCDs.Count + targetLCDs.Count).ToString() + " LCDs");
             switch (sortByDistance)
             {
                 case true:
-                    Echo("Sorting by distance.");
+                    Echo("Sorting by distance");
                     break;
                 case false:
-                    Echo("Sorting by threat level.");
+                    Echo("Sorting by threat level");
                     break;
             }
             if (tickNum == 10)
@@ -91,35 +93,21 @@
             }
             if (targetLCDs.Count + friendLCDs.Count > 0)
             {
-                GetAllTargets();
-                TargetLCD();
+                UpdateLCDs();
             }
         }
 
-        public struct Output
-        {
-            public string Text;
-            public Color Color;
-
-            public Output(string text, Color color)
-            {
-                Text = text;
-                Color = color;
-            }
-        }
-
-        Dictionary<Output, double> targetOutput = new Dictionary<Output, double>();
-        Dictionary<Output, double> friendOutput = new Dictionary<Output, double>();
+        Dictionary<String, double> targetOutput = new Dictionary<String, double>();
+        Dictionary<String, double> friendOutput = new Dictionary<String, double>();
 
         static List<IMyTextPanel> allLCDs = new List<IMyTextPanel>();
         static List<IMyTextSurface> targetLCDs = new List<IMyTextSurface>();
         static List<IMyTextSurface> friendLCDs = new List<IMyTextSurface>();
 
-        void TargetLCD()
+        void UpdateLCDs()
         {
-            ClearLcd();
-            targetOutput.Clear();
-            friendOutput.Clear();
+            GetAllTargets();
+            ClearAll();
 
             foreach (var obj in targetDataDict)
             {
@@ -133,16 +121,13 @@
                     switch (target.Info.Type)
                     {
                         case MyDetectedEntityType.CharacterHuman:
-                            type = "Suit";
-                            break;
-                        case MyDetectedEntityType.LargeGrid:
-                            type = "L";
+                            warning = "Suit";
                             break;
                         case MyDetectedEntityType.SmallGrid:
-                            type = "S";
+                            warning = "S";
                             break;
                         default:
-                            type = "";
+                            warning = "";
                             break;
                     }
                     if (sortByDistance)
@@ -150,35 +135,43 @@
                         sorter = target.Distance;
                         myTargetPriority = -1;
                     }
-                    if (target.Color == approachColor)
-                        warning = "!! ";
                     if (target.Color == targetingColor)
-                        warning = "! ";
+                        warning = "@"+warning;
 
                     if (target.MyTarget)
                     {
-                        Color targetColor = myTargetColor;
-                        if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Neutral)
-                            targetColor = neutralColor;
-                        if (warning == "!! ")
-                            targetColor = targetingMyTargetColor;
+                        warning = ">"+warning;
+                    }
 
-                        targetOutput.Add(new Output("@ " + warning + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), targetColor), myTargetPriority);
+                    string tempTargetName = target.Info.Name;
+
+                    if (target.Info.Name.Length > maxNameLenght)
+                    {
+                        tempTargetName = target.Info.Name.Substring(0, maxNameLenght);
+                    }
+
+                    target.DistanceColor = Color.Gray;
+                    if (target.Distance <= closeDistance)
+                    {
+                        target.DistanceColor = Color.LightGray;
+                        if (target.Distance <= closeDistance - (closeDistance / 6)) target.DistanceColor = Color.White;
+                        if (target.Distance <= closeDistance - (2 * closeDistance / 6)) target.DistanceColor = Color.LightYellow;
+                        if (target.Distance <= closeDistance - (3 * closeDistance / 6)) target.DistanceColor = Color.Yellow;
+                        if (target.Distance <= closeDistance - (4 * closeDistance / 6)) target.DistanceColor = Color.Orange;
+                        if (target.Distance <= closeDistance - (5 * closeDistance / 6)) target.DistanceColor = Color.Red;
+                    }
+
+                    if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
+                    {                       
+                        targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() +" "+ ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
                     }
                     else
                     {
-                        if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
-                        {
-                            targetOutput.Add(new Output(warning + type + " " + Math.Round(target.Distance / 1000, 2).ToString() + "km " + target.Info.Name.ToString(), target.Color), sorter);
-                        }
-                        else
-                        {
-                            string friendlyType = "";
-                            if (target.Info.Name.ToString() == "")
-                                friendlyType = "Suit";
-                            friendOutput.Add(new Output(Math.Round(target.Distance / 1000, 2).ToString() + "km " + friendlyType + target.Info.Name.ToString(), target.Color), sorter);
-                        }
-                    }
+                        string friendlyType = "";
+                        if (target.Info.Name.ToString() == "")
+                            friendlyType = "Suit";
+                        friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() +" "+ ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + friendlyType, sorter);
+                    }               
                 }
                 catch { }
             }
@@ -186,7 +179,7 @@
             WriteLcd(friendOutput, friendLCDs);
         }
 
-        void ClearLcd()
+        void ClearAll()
         {
             foreach (IMyTextSurface lcd in targetLCDs)
             {
@@ -196,11 +189,13 @@
             {
                 lcd.WriteText("");
             }
+            targetOutput.Clear();
+            friendOutput.Clear();
         }
 
-        void WriteLcd(Dictionary<Output, double> outputDict, List<IMyTextSurface> lcdList)
+        void WriteLcd(Dictionary<String, double> outputDict, List<IMyTextSurface> lcdList)
         {
-            IOrderedEnumerable<KeyValuePair<Output, double>> sortedDict;
+            IOrderedEnumerable<KeyValuePair<String, double>> sortedDict;
 
             if (sortByDistance)
                 sortedDict = from entry in outputDict orderby entry.Value ascending select entry;
@@ -209,16 +204,9 @@
 
             foreach (IMyTextSurface lcd in lcdList)
             {
-                foreach (KeyValuePair<Output, double> output in sortedDict)
+                foreach (KeyValuePair<String, double> output in sortedDict)
                 {
-                    if (output.Key.Text.Length > 33)
-                    {
-                        lcd.WriteText(ColorToColor(output.Key.Color) + output.Key.Text.Substring(0, 30) + "...\n", true);
-                    }
-                    else
-                    {
-                        lcd.WriteText(ColorToColor(output.Key.Color) + output.Key.Text + "\n", true);
-                    }
+                    lcd.WriteText(output.Key + "\n", true);
                 }
             }
         }
@@ -291,7 +279,6 @@
                         {
                             if (targetData.ApproachSpeed > approachSpeed || targetData.Distance < (approachDistance / 2))
                             {
-                                targetData.Color = approachColor;
                                 approaching = true;
                                 if (!soundPlayed)
                                 {
@@ -345,7 +332,7 @@
         }
         void SoundWarning(bool onOff)
         {
-            if(soundblocks.Count > 0 && soundblocks[0] != null && soundblocks[0].IsWorking && soundblocks[0].IsFunctional && approachSound)
+            if (soundblocks.Count > 0 && soundblocks[0] != null && soundblocks[0].IsWorking && soundblocks[0].IsFunctional)
             {
                 if (onOff)
                 {
