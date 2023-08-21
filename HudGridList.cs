@@ -1,27 +1,36 @@
 
+
         //Lists nearby grids to LCDs, takes info from weaponcore api
         //meant to work with hudlcd plugin
         //name LCDs "Friend LCD" and "Target LCD"
         //--Asmoww
+
         double maxMs = 0.4;
         bool sortByDistance = true; //sort by threat if disabled 
-        int closeDistance = 5000; //at what distance should colors start be applied to distance number
+        int closeDistance = 6000; //at what distance should colors start be applied to distance number
         bool approachWarning = true; //warn for approaching grids with sound block
         int approachDistance = 1500; //distance in meters, warn if grid is approaching in specified distance
         int approachSpeed = 3; //speed in m/s, if approaching faster, warn
         string warningSound = "SoundBlockAlert2";
         int maxNameLenght = 25; //how long grid names are allowed to be displayed without cutting them off
+        int maxEntries = 15; //max amount of grids to display at a time
+        bool displayEmpty = false; //make the lcds display no enemies or friendlies nearby
+        bool hideNonimportant = true; //hide not-so-important enemy grids, 1. threat level of 0.1 or lower  2. no movement or freely drifting
         Color friendColor = Color.Green;
-        Color neutralColor = Color.LightBlue;
         Color enemyColor = Color.IndianRed;
-        Color approachColor = Color.Yellow;
         Color targetingColor = Color.Orange;
+
+
+        // code code code code code code code code code code code code code code code code
+
 
         public static WcPbApi wcapi = new WcPbApi();
         Dictionary<MyDetectedEntityInfo, float> wcTargets = new Dictionary<MyDetectedEntityInfo, float>();
         List<MyDetectedEntityInfo> wcObstructions = new List<MyDetectedEntityInfo>();
         Dictionary<long, TargetData> targetDataDict = new Dictionary<long, TargetData>();
         Dictionary<long, double> prevDistances = new Dictionary<long, double>();
+        Dictionary<long, VRageMath.Vector3D> prevVelocities = new Dictionary<long, VRageMath.Vector3D>();
+        Dictionary<long, VRageMath.MatrixD> prevAngles = new Dictionary<long, VRageMath.MatrixD>();
         static MyDetectedEntityInfo currentTarget;
         bool approaching = false;
         bool soundPlayed = false;
@@ -115,8 +124,6 @@
                 {
                     var target = obj.Value;
                     double sorter = target.Threat;
-                    int myTargetPriority = 100;
-                    string type;
                     string warning = "";
                     switch (target.Info.Type)
                     {
@@ -133,14 +140,13 @@
                     if (sortByDistance)
                     {
                         sorter = target.Distance;
-                        myTargetPriority = -1;
                     }
                     if (target.Color == targetingColor)
-                        warning = "@"+warning;
+                        warning = "@" + warning;
 
                     if (target.MyTarget)
                     {
-                        warning = ">"+warning;
+                        warning = ">" + warning;
                     }
 
                     string tempTargetName = target.Info.Name;
@@ -150,30 +156,50 @@
                         tempTargetName = target.Info.Name.Substring(0, maxNameLenght);
                     }
 
-                    target.DistanceColor = Color.Gray;
-                    if (target.Distance <= closeDistance)
-                    {
-                        target.DistanceColor = Color.LightGray;
-                        if (target.Distance <= closeDistance - (closeDistance / 6)) target.DistanceColor = Color.White;
-                        if (target.Distance <= closeDistance - (2 * closeDistance / 6)) target.DistanceColor = Color.LightYellow;
-                        if (target.Distance <= closeDistance - (3 * closeDistance / 6)) target.DistanceColor = Color.Yellow;
-                        if (target.Distance <= closeDistance - (4 * closeDistance / 6)) target.DistanceColor = Color.Orange;
-                        if (target.Distance <= closeDistance - (5 * closeDistance / 6)) target.DistanceColor = Color.Red;
-                    }
-
+                    target.DistanceColor = Color.DimGray;
+   
                     if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
-                    {                       
-                        targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() +" "+ ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                    {
+                        if (prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && hideNonimportant)
+                        {
+                            if (target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key] && target.Threat < 0.1)
+                            {
+                                continue;
+                            }
+                        }
+
+                        if (target.Distance <= closeDistance)
+                        {
+                            target.DistanceColor = Color.Gray;
+                            if (target.Distance <= closeDistance - (closeDistance / 6)) target.DistanceColor = Color.LightGray;
+                            if (target.Distance <= closeDistance - (2 * closeDistance / 6)) target.DistanceColor = Color.LightYellow;
+                            if (target.Distance <= closeDistance - (3 * closeDistance / 6)) target.DistanceColor = Color.Yellow;
+                            if (target.Distance <= closeDistance - (4 * closeDistance / 6)) target.DistanceColor = Color.Orange;
+                            if (target.Distance <= closeDistance - (5 * closeDistance / 6)) target.DistanceColor = Color.Red;
+                        }
+                        if(targetOutput.Count() <= maxEntries) targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
                     }
                     else
                     {
+                        if (target.Distance <= closeDistance)
+                        {
+                            target.DistanceColor = Color.Gray;
+                            if (target.Distance <= closeDistance - (closeDistance / 6)) target.DistanceColor = Color.DarkGray;
+                            if (target.Distance <= closeDistance - (2 * closeDistance / 6)) target.DistanceColor = Color.LightGray;
+                            if (target.Distance <= closeDistance - (4 * closeDistance / 6)) target.DistanceColor = Color.White;
+                        }
                         string friendlyType = "";
                         if (target.Info.Name.ToString() == "")
                             friendlyType = "Suit";
-                        friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() +" "+ ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + friendlyType, sorter);
-                    }               
+                        if (friendOutput.Count() <= maxEntries) friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + friendlyType, sorter);
+                    }
                 }
                 catch { }
+            }
+            if (displayEmpty)
+            {
+                if (targetOutput.Count() == 0) targetOutput.Add(ColorToColor(Color.DarkRed) + "No enemies :)", 0);
+                if (friendOutput.Count() == 0) friendOutput.Add(ColorToColor(Color.DarkGreen) + "No friends :(", 0);
             }
             WriteLcd(targetOutput, targetLCDs);
             WriteLcd(friendOutput, friendLCDs);
@@ -207,7 +233,7 @@
                 foreach (KeyValuePair<String, double> output in sortedDict)
                 {
                     lcd.WriteText(output.Key + "\n", true);
-                }
+                }       
             }
         }
         string ColorToColor(Color color)
@@ -298,10 +324,6 @@
                     case MyRelationsBetweenPlayerAndBlock.Friends:
                         targetData.Color = friendColor;
                         break;
-                    case MyRelationsBetweenPlayerAndBlock.Neutral:
-                        targetData.Color = neutralColor;
-                        break;
-
                     default:
                         targetData.Threat = -1;
                         if (targetData.Info.Type == MyDetectedEntityType.Unknown)
@@ -323,7 +345,11 @@
             foreach (var item in temp)
                 targetDataDict[item.Key] = item.Value;
             foreach (var item in targetDataDict)
+            {
                 prevDistances[item.Key] = item.Value.Distance;
+                prevVelocities[item.Key] = item.Value.Info.Velocity;
+                prevAngles[item.Key] = item.Value.Info.Orientation;
+            }
             if (!approaching)
             {
                 SoundWarning(false);
@@ -373,17 +399,19 @@
             GridTerminalSystem.GetBlocksOfType(soundblocks);
             foreach (IMyTextPanel lcd in allLCDs)
             {
-                if (lcd.CustomName.Contains("Friend") && lcd.IsSameConstructAs(Me))
+                if (lcd.CustomName.ToLower().Contains("friend") && lcd.IsSameConstructAs(Me))
                 {
                     lcd.ContentType = ContentType.TEXT_AND_IMAGE;
                     lcd.BackgroundColor = Color.Black;
                     friendLCDs.Add(lcd);
+                    if (!lcd.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.98:0.98";
                 }
-                else if (lcd.CustomName.Contains("Target") && lcd.IsSameConstructAs(Me))
+                else if (lcd.CustomName.ToLower().Contains("target") && lcd.IsSameConstructAs(Me))
                 {
                     lcd.ContentType = ContentType.TEXT_AND_IMAGE;
                     lcd.BackgroundColor = Color.Black;
                     targetLCDs.Add(lcd);
+                    if (!lcd.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.7:0.98";
                 }
             }
         }
