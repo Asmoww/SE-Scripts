@@ -37,7 +37,7 @@
         static double tickSpeed = 0.1667; //seconds per tick
         IMyTerminalBlock reference;
 
-        float rangeOverride = 7000;
+        float rangeOverride = 15000;
         bool useRangeOverride = true;
         bool showAsteroids = false;
         bool drawQuadrants = false;
