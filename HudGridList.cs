@@ -125,7 +125,7 @@
             tickNum++;
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
             Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
-            Echo((friendLCDs.Count + targetLCDs.Count).ToString() + " LCDs");
+            Echo((friendLCDs.Count + targetLCDs.Count + radarLCDs.Count).ToString() + " LCDs");
             switch (sortByDistance)
             {
                 case true:
