@@ -1,52 +1,48 @@
         // set one cockpit as main, it's used for orientation
         // artificial masses should be near the center of mass, otherwise the drive will rotate the ship
-        // spherical gens should only be place in front of or behind the artificial masses
-        // - make sure to have an equal amount on both the front and back
+        // spherical gens should only be placed in front of or behind the artificial masses
+        // - recommended to have an equal amount on both the front and back
         // - otherwise gravity drive will be disabled while shield is active to prevent unwanted movement
         // shield is toggled between modes with the argument "shield" or directly with "push", "pull" or "off"
-        // gravity drive can be disabled with "drive", shield can still be used
-        // name an LCD "Gdrive LCD" for use with hudlcd plugin
+        // gravity drive can be toggled with "drive"
+        // name an LCD "status lcd" to broadcast misc. info to hudlcd, multiple scripts can use the same status lcd
+        // --Asmoww
 
-        // --------------- settings ---------------
+        // general settings
 
-        // maximun allowed average ms per tick, 0.3 ms is allowed on most servers
-        double maxMs = 0.3;
+        double maxMs = 0.3; // maximun allowed average ms per tick, 0.3 ms is allowed on most servers
+        int statusPriority = 1; // lower number = higher up on the status lcd, all scripts need to have a different number
 
-        // dampening will be disabled below this speed
-        // - set to above the max speed to disable completely 
-        int lowestSpeed = 0;
+        // gravity drive settings
 
-        // automatically set the field size of the gravity generators
-        bool autoFieldSize = true;
+        int lowestSpeed = 0; // dampening will be disabled below this speed (incase the ship keeps moving when trying to come to a stop)
+        bool autoFieldSize = true;// automatically set the field size of the gravity generators
+        int checkEveryTicks = 30; // how often to check for changes in blocks such as damage (in ticks)
+        bool keepDriveOn = true; // keep drive on while shield is on, will be disabled automatically if spherical gens aren't balanced correctly
 
-        // how often to check for changes in blocks such as damage
-        // - 60 ticks = second
-        int checkEveryTicks = 30;
+        // which info to display on status lcd 
 
-        // keep drive on while shield is on
-        // - will be disabled automatically if spherical gens aren't balanced correctly
-        bool keepDriveOn = true;
-
-        // which info to display on hudlcd 
         bool gdrive = true;
         bool gshield = true;
         bool blocks = true;
+        bool efficiency = true; // efficiency loss from natural gravity    
         bool runtime = true;
-        bool efficiency = true; // efficiency loss from natural gravity
 
-        // no touchie below this point unless you know what you're doing ------------------------------------------------
+
+        // code below code below code below code below code below code below code below code below code below code below code below
+
 
         IMyCockpit cockpit;
         List<IMyCockpit> cockpits = new List<IMyCockpit>();
         List<IMyGravityGenerator> gens = new List<IMyGravityGenerator>();
         List<IMyGravityGeneratorSphere> spheres = new List<IMyGravityGeneratorSphere>();
         List<IMyArtificialMassBlock> masses = new List<IMyArtificialMassBlock>();
-        IMyTextSurface lcd;
         Vector3I fieldMax, fieldMin;
         Vector3D massCenterVector = new Vector3D();
         int shield = 0;
         int drive = 1;
         static List<IMyTextPanel> allLCDs = new List<IMyTextPanel>();
+        static List<IMyTextSurface> statusLCDs = new List<IMyTextSurface>();
         bool nocontinue = false;
 
         public Program()
@@ -66,14 +62,13 @@
         bool idle = false;
         int tickNum = 0;
         string shieldString = "<color=139,0,0,255>Off";
-        string driveString = "...";
 
         public void Main(string arg, UpdateType updateSource)
         {
             if (arg == "shield" || arg == "push" || arg == "pull" || arg == "off" || arg == "drive")
             {
                 if (arg == "shield") arg = shield.ToString();
-                if (arg == "drive") arg = "d"+drive.ToString();
+                if (arg == "drive") arg = "d" + drive.ToString();
                 switch (arg)
                 {
                     case "-1":
@@ -119,22 +114,6 @@
 
             if (waitTillErrorFixed) return;
 
-            if ((spheres.Count > 0 && shield != 0 && !SpheresEqual()) || (gens.Count == 0 && shield != 0))
-            {
-                driveString = "Shld";
-            }
-            else if(drive == 0)
-            {
-                driveString = "Off";
-            }
-            else
-            {
-                driveString = "On";
-            }
-            TryWrite("");
-            Echo("D: " + driveString);
-            Echo("S: " + shieldString.Split('>')[1]);
-            Echo("GDrive");
             Echo("Gravity generators: " + gens.Count.ToString() + " + " + spheres.Count.ToString() + "s");
             Echo("Artificial masses: " + masses.Count.ToString());
             Echo("Auto field size: " + autoFieldSize.ToString());
@@ -146,14 +125,14 @@
 
             if ((spheres.Count > 0 && shield != 0 && !SpheresEqual()) || (gens.Count == 0 && shield != 0) || drive == 0 || (shield != 0 && !keepDriveOn) || masses.Count == 0)
             {
-                if(spheres.Count == 0 || shield == 0 || drive == 0 || masses.Count == 0)
+                if (spheres.Count == 0 || shield == 0 || drive == 0 || masses.Count == 0)
                 {
-                    if(gdrive) TryWrite("<color=211,211,211,255>Drive: <color=139,0,0,255>Off", true);                  
+                    if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=139,0,0,255>Off");
                     Echo("Velocity: ---\nStatus: Off");
                 }
                 else
                 {
-                    if(gdrive) TryWrite("<color=211,211,211,255>Drive: <color=0,139,139,255>Shield", true);
+                    if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=0,139,139,255>Shield");
                     Echo("Velocity: ---\nStatus: Shield");
                 }
                 PowerOnOff(false);
@@ -161,14 +140,14 @@
             }
             else if (Math.Round(cockpit.GetShipSpeed(), 2) == 0 && NoPilotInput())
             {
-                if (gdrive) TryWrite("<color=211,211,211,255>Drive: <color=173,216,230,255>Standby", true);
+                if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=173,216,230,255>Standby");
                 Echo("Velocity: ---\nStatus: Standby");
                 PowerOnOff(false);
                 nocontinue = true;
             }
             else if (!cockpit.DampenersOverride && NoPilotInput())
             {
-                if (gdrive) TryWrite("<color=211,211,211,255>Drive: <color=160,160,0,160>Drifting", true);
+                if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=160,160,0,160>Drifting");
                 Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: Drifting");
                 PowerOnOff(false);
                 nocontinue = true;
@@ -180,20 +159,22 @@
                 {
                     status = "<color=139,0,0,255>Braking";
                 }
-                if (gdrive) TryWrite("<color=211,211,211,255>Drive: " + status, true);
+                if (gdrive) SendStatus("<color=211,211,211,255>Drive: " + status);
                 Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: " + status);
                 PowerOnOff(true);
             }
 
-            if(spheres.Count == 0)
+            if (spheres.Count == 0)
             {
                 shieldString = "<color=139,0,0,255>Off";
                 shield = 0;
             }
-            if(gshield) TryWrite("\n<color=211,211,211,255>Shield: " + shieldString, true);
-            if (blocks) TryWrite("\n<color=100,100,100,100>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString(), true);
-            if(runtime) TryWrite("\n<color=100,100,100,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms", true);
-            if(efficiency) TryWrite("\n<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%", true);
+            string effString = "";
+            if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
+            if (gshield) SendStatus("<color=211,211,211,255>Shield: " + shieldString);
+            if (blocks) SendStatus(effString+" <color=70,70,70,255>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString());
+            if (runtime) SendStatus("<color=100,100,100,255>GD <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms");
+            WriteStatus();
 
             if (nocontinue) return;
 
@@ -237,8 +218,76 @@
                 {
                     sphere.GravityAcceleration = (float)-((moveInd.Z - velVect.Z) * IsFrontOrBack(sphere));
                 }
-            }
+            }          
         }
+
+        List<string> statusList = new List<string>();
+        static List<IMyProgrammableBlock> progBlocks = new List<IMyProgrammableBlock>();
+        void SendStatus(string status)
+        {
+            statusList.Add(status);
+        }
+        void WriteStatus()
+        {
+            Me.CustomData = "statuspriority€" + statusPriority.ToString() + "€";
+            foreach (string status in statusList)
+            {
+                Me.CustomData = Me.CustomData + status + "\n";
+            }
+            if (StatusHighestPriority())
+            {
+                foreach (IMyTextSurface lcd in statusLCDs)
+                {
+                    try   {lcd.WriteText(StatusToWrite());}
+                    catch { }
+                }
+            }
+            statusList.Clear();
+        }
+        bool StatusHighestPriority()
+        {
+            foreach (IMyProgrammableBlock prog in progBlocks)
+            {
+                if (prog.CustomData.StartsWith("statuspriority€") && prog.IsSameConstructAs(Me))
+                {
+                    int priority = -1;
+                    int.TryParse(prog.CustomData.Split('€')[1], out priority);
+                    if (priority < statusPriority)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        string StatusToWrite()
+        {
+            string tempToWrite = "";
+            Dictionary<IMyProgrammableBlock, int> progBlocksTemp = new Dictionary<IMyProgrammableBlock, int>();
+            IOrderedEnumerable<KeyValuePair<IMyProgrammableBlock, int>> sortedProgs;
+            foreach (IMyProgrammableBlock prog in progBlocks)
+            {
+                if (!prog.CustomData.StartsWith("statuspriority€") || !prog.IsSameConstructAs(Me))
+                {
+                    progBlocks.Remove(prog);
+                }
+                else
+                {
+                    progBlocksTemp.Add(prog, Int32.Parse(prog.CustomData.Split('€')[1]));
+                }
+            }
+
+            sortedProgs = (from entry in progBlocksTemp orderby entry.Value ascending select entry);
+            foreach (KeyValuePair<IMyProgrammableBlock, int> prog in sortedProgs.ToList())
+            {
+                if (prog.Key.CustomData.StartsWith("statuspriority€"))
+                {
+                    tempToWrite = tempToWrite + prog.Key.CustomData.Split('€')[2];
+                }
+            }
+            return tempToWrite;
+        }
+
         public void PowerOnOff(bool power, bool shieldToggle = false)
         {
             if (shieldToggle)
@@ -350,10 +399,11 @@
         {
             cockpit = null;
             cockpits.Clear();
-            lcd = null;
+            statusLCDs.Clear();
             gens.Clear();
             masses.Clear();
             spheres.Clear();
+            progBlocks.Clear();
             fieldMax = Vector3I.Zero;
             fieldMin = Vector3I.Zero;
             massCenterVector = Vector3D.Zero;
@@ -390,18 +440,19 @@
 
                 foreach (IMyTextPanel lcdd in allLCDs)
                 {
-                    if (lcdd.CustomName.ToLower().Contains("gdrive") && lcdd.IsSameConstructAs(Me))
+                    if (lcdd.CustomName.ToLower().Contains("status") && lcdd.IsSameConstructAs(Me))
                     {
                         lcdd.ContentType = ContentType.TEXT_AND_IMAGE;
                         lcdd.BackgroundColor = Color.Black;
-                        lcd = lcdd;
+                        if (!lcdd.CustomData.Contains("hudlcd")) lcdd.CustomData = "hudlcd:-0.98:0.3";
+                        statusLCDs.Add(lcdd);
                     }
                 }
 
-
+                GridTerminalSystem.GetBlocksOfType(progBlocks);
                 GridTerminalSystem.GetBlocksOfType(spheres);
                 GridTerminalSystem.GetBlocksOfType(masses);
-                GridTerminalSystem.GetBlocksOfType(gens);
+                GridTerminalSystem.GetBlocksOfType(gens);               
 
                 for (int i = 0; i < masses.Count; i++)
                 {
@@ -457,23 +508,16 @@
         public bool SpheresEqual()
         {
             int balanceNum = 0;
-            foreach(IMyGravityGeneratorSphere sphere in spheres)
+            foreach (IMyGravityGeneratorSphere sphere in spheres)
             {
                 balanceNum = balanceNum + IsFrontOrBack(sphere);
             }
-            if(balanceNum == 0)
+            if (balanceNum == 0)
             {
                 return true;
             }
             else
             {
                 return false;
-            }
-        }
-        public void TryWrite(string text, bool append = false)
-        {
-            if (lcd != null)
-            {
-                lcd.WriteText(text, append);
             }
         }
