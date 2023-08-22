@@ -62,7 +62,8 @@
         double averageRuntime = 0;
         static double tickSpeed = 1 / 6; //seconds per tick
         IMyTerminalBlock reference;
-        int turretsCount = 0;     
+        int turretsCount = 0;
+        Dictionary<string, string> jumps = new Dictionary<string, string>();
 
         bool useRangeOverride = true;
         bool showAsteroids = false;
@@ -379,6 +380,14 @@
         {
             radarSurface.ClearContacts();
             approaching = false;
+            if (targetDataDict.Count > 0)
+            { 
+                foreach (var item in targetDataDict)
+                {
+                    prevVelocities[item.Key] = item.Value.Info.Velocity;
+                    prevAngles[item.Key] = item.Value.Info.Orientation;
+                }
+            }
             targetDataDict.Clear();
             wcTargets.Clear();
             wcObstructions.Clear();
@@ -496,15 +505,13 @@
                 temp[targetData.Info.EntityId] = targetData;
                 radarSurface.AddContact(targetData.Info.Position, reference.WorldMatrix, targetData.Info.Type, targetData.Color, targetData.Color, targetData.Info.Name, relation, targetData.MyTarget, targetData.Distance, targetData.Info.Velocity, targetData.Threat);
             }
-
+           
             targetDataDict.Clear();
             foreach (var item in temp)
                 targetDataDict[item.Key] = item.Value;
             foreach (var item in targetDataDict)
             {
                 prevDistances[item.Key] = item.Value.Distance;
-                prevVelocities[item.Key] = item.Value.Info.Velocity;
-                prevAngles[item.Key] = item.Value.Info.Orientation;
             }
             if (!approaching)
             {
