@@ -114,8 +114,7 @@
         public Program()
         {
             Echo("Starting...");
-            radarSurface = new RadarSurface(titleBarColor, backColor, lineColor, planeColor, textColor, missileLockColor, projectionAngle, MaxRange, drawQuadrants);
-            GetBlocks();
+            radarSurface = new RadarSurface(titleBarColor, backColor, lineColor, planeColor, textColor, missileLockColor, projectionAngle, MaxRange, drawQuadrants);          
             try
             {
                 wcapi.Activate(Me);
@@ -124,6 +123,7 @@
             {
                 Echo("Weaponcore API failed to activate.");
             }
+            GetBlocks();
             Echo("Loaded!");
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
         }
@@ -145,8 +145,8 @@
             {
                 Echo("ERROR: No WC weapon found,");
                 Echo("please add one to continue.");
-                Me.CustomData = "";
-                SendStatus("RDR ERROR");
+                SendStatus("<color=255,0,0,255>RADAR ERROR: Check PB for more info!");
+                WriteStatus();
                 return;
             }
             Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
