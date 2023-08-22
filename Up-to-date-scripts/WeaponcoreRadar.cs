@@ -1,10 +1,13 @@
         // lists nearby grids to lcds and includes whips modified weaponcore radar
         // name LCDs "Friend LCD", "Target LCD" and "Radar LCD" (non case sensitive)
+        // friend and target lcd can be combined by naming the lcd "Friend Target LCD"
+        // name an LCD "status lcd" to broadcast misc. info to hudlcd, multiple scripts can use the same status lcd
         // radar does NOT work with hudlcd
         // --Asmoww
 
         // general settings
-        double maxMs = 0.3; // throttle the script if runtime exceeds this      
+        double maxMs = 0.3; // throttle the script if runtime exceeds this
+        int statusPriority = 2; // lower number = higher up on the status lcd, all scripts need to have a different number
 
         // gridlist settings
         bool sortByDistance = true; // sort by threat if disabled 
@@ -15,7 +18,7 @@
         bool hideNonimportant = true; // hide not-so-important enemy grids, threat level of 0.1 or lower, no movement or freely drifting
         bool approachWarning = true; // warn for approaching grids with sound block
         int approachDistance = 1500; // distance in meters, warn if grid is approaching within specified distance
-        string warningSound = "SoundBlockAlert2";       
+        string warningSound = "SoundBlockAlert2";
         Color friendColor = Color.Green;
         Color enemyColor = Color.IndianRed;
         Color targetingColor = Color.Orange;
@@ -38,6 +41,9 @@
         Color textColor = new Color(100, 100, 100, 100);
         Color missileLockColor = new Color(0, 100, 100, 255);
 
+        // which info to display on status lcd 
+
+        bool runtime = true;
 
         // code below code below code below code below code below code below code below code below code below code below code below
 
@@ -54,9 +60,10 @@
         bool soundPlayed = false;
         int tickNum = 0;
         double averageRuntime = 0;
-        static double tickSpeed = 1/6; //seconds per tick
+        static double tickSpeed = 1 / 6; //seconds per tick
         IMyTerminalBlock reference;
-       
+        int turretsCount = 0;     
+
         bool useRangeOverride = true;
         bool showAsteroids = false;
         float MaxRange
@@ -105,9 +112,8 @@
 
         public Program()
         {
-            Echo("starting");
+            Echo("Starting...");
             radarSurface = new RadarSurface(titleBarColor, backColor, lineColor, planeColor, textColor, missileLockColor, projectionAngle, MaxRange, drawQuadrants);
-            Echo("heloasd");
             GetBlocks();
             try
             {
@@ -117,6 +123,7 @@
             {
                 Echo("Weaponcore API failed to activate.");
             }
+            Echo("Loaded!");
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
         }
 
@@ -124,6 +131,23 @@
         {
             tickNum++;
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
+            if (averageRuntime > maxMs * 0.9)
+            {
+                return;
+            }
+            if (tickNum == 10)
+            {
+                GetBlocks();
+                tickNum = 0;
+            }           
+            if(turretsCount < 1)
+            {
+                Echo("ERROR: No WC weapon found,");
+                Echo("please add one to continue.");
+                Me.CustomData = "";
+                SendStatus("RDR ERROR");
+                return;
+            }
             Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
             Echo((friendLCDs.Count + targetLCDs.Count + radarLCDs.Count).ToString() + " LCDs");
             switch (sortByDistance)
@@ -135,34 +159,93 @@
                     Echo("Sorting by threat level");
                     break;
             }
-            if (tickNum == 10)
-            {
-                GetBlocks();
-                tickNum = 0;
-            }
-            if (averageRuntime > maxMs * 0.9)
-            {
-                return;
-            }
             if (targetLCDs.Count + friendLCDs.Count > 0)
             {
                 UpdateLCDs();
             }
-            radarSurface.SortContacts();
+            if(radarLCDs.Count > 0) radarSurface.SortContacts();
             foreach (IMyTextSurface lcd in radarLCDs)
-            {
-                var lcdtemp = lcd;
-                radarSurface.DrawRadar(lcdtemp, false);
+            {              
+                radarSurface.DrawRadar(lcd, false);
             }
+            if (runtime) SendStatus("<color=100,100,100,255>RDR <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " +maxMs.ToString() +" ms");
+            WriteStatus();
+        }
+
+        List<string> statusList = new List<string>();
+        static List<IMyProgrammableBlock> progBlocks = new List<IMyProgrammableBlock>();
+        void SendStatus(string status)
+        {
+            statusList.Add(status);           
+        }
+        void WriteStatus()
+        {
+            Me.CustomData = "statuspriority€" + statusPriority.ToString() + "€";
+            foreach (string status in statusList)
+            {
+                Me.CustomData = Me.CustomData + status + "\n";
+            }
+            if (StatusHighestPriority())
+            {
+                foreach (IMyTextSurface lcd in statusLCDs)
+                {
+                    try { lcd.WriteText(StatusToWrite()); }
+                    catch { }
+                }
+            }
+            statusList.Clear();
+        }
+        bool StatusHighestPriority()
+        {
+            foreach(IMyProgrammableBlock prog in progBlocks)
+            {
+                if(prog.CustomData.StartsWith("statuspriority€") && prog.IsSameConstructAs(Me))
+                {
+                    int priority = -1;
+                    int.TryParse(prog.CustomData.Split('€')[1], out priority);
+                    if (priority < statusPriority)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        string StatusToWrite()
+        {
+            string tempToWrite = "";
+            Dictionary<IMyProgrammableBlock, int> progBlocksTemp = new Dictionary<IMyProgrammableBlock, int>();
+            IOrderedEnumerable<KeyValuePair<IMyProgrammableBlock, int>> sortedProgs;
+            foreach(IMyProgrammableBlock prog in progBlocks)
+            {
+                if(!prog.CustomData.StartsWith("statuspriority€") || !prog.IsSameConstructAs(Me))
+                {
+                    progBlocks.Remove(prog);
+                }
+                else
+                {
+                    progBlocksTemp.Add(prog, Int32.Parse(prog.CustomData.Split('€')[1]));
+                }
+            }
+            
+            sortedProgs = (from entry in progBlocksTemp orderby entry.Value ascending select entry);
+            foreach (KeyValuePair<IMyProgrammableBlock, int> prog in sortedProgs.ToList())
+            {
+                if(prog.Key.CustomData.StartsWith("statuspriority€"))
+                {
+                    tempToWrite = tempToWrite + prog.Key.CustomData.Split('€')[2];
+                }
+            }
+            return tempToWrite;
         }
 
         Dictionary<String, double> targetOutput = new Dictionary<String, double>();
         Dictionary<String, double> friendOutput = new Dictionary<String, double>();
 
-        static List<IMyTextPanel> allLCDs = new List<IMyTextPanel>();
         static List<IMyTextSurface> targetLCDs = new List<IMyTextSurface>();
         static List<IMyTextSurface> friendLCDs = new List<IMyTextSurface>();
         static List<IMyTextSurface> radarLCDs = new List<IMyTextSurface>();
+        static List<IMyTextSurface> statusLCDs = new List<IMyTextSurface>();
 
         void UpdateLCDs()
         {
@@ -208,7 +291,7 @@
                     }
 
                     target.DistanceColor = Color.DimGray;
-   
+
                     if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
                     {
                         if (prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && hideNonimportant)
@@ -228,7 +311,7 @@
                             if (target.Distance <= colorDistance - (4 * colorDistance / 6)) target.DistanceColor = Color.Orange;
                             if (target.Distance <= colorDistance - (5 * colorDistance / 6)) target.DistanceColor = Color.Red;
                         }
-                        if(targetOutput.Count() <= maxEntries) targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                        if (targetOutput.Count() <= maxEntries) targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
                     }
                     else
                     {
@@ -284,7 +367,7 @@
                 foreach (KeyValuePair<String, double> output in sortedDict)
                 {
                     lcd.WriteText(output.Key + "\n", true);
-                }       
+                }
             }
         }
         string ColorToColor(Color color)
@@ -350,7 +433,7 @@
                     targetData.Targeting = t.Value.EntityId;
                 try
                 {
-                    targetData.Distance = Vector3D.Distance(targetData.Info.Position, cockpits[0].CenterOfMass);
+                    targetData.Distance = Vector3D.Distance(targetData.Info.Position, allControllers[0].CenterOfMass);
                 }
                 catch
                 {
@@ -458,45 +541,78 @@
             }
         }
 
-        List<IMyCockpit> cockpits = new List<IMyCockpit>();
         List<IMySoundBlock> soundblocks = new List<IMySoundBlock>();
 
         void GetBlocks()
         {
-            allLCDs.Clear();
             friendLCDs.Clear();
             targetLCDs.Clear();
             radarLCDs.Clear();
-            cockpits.Clear();
+            statusLCDs.Clear();
             allControllers.Clear();
             soundblocks.Clear();
-            GridTerminalSystem.GetBlocksOfType(allLCDs);
-            GridTerminalSystem.GetBlocksOfType(cockpits);
-            GridTerminalSystem.GetBlocksOfType(soundblocks);
-            GridTerminalSystem.GetBlocksOfType(allControllers);
-            foreach (IMyTextPanel lcd in allLCDs)
+            progBlocks.Clear();
+            turretsCount = 0;
+            GridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(null, SortBlocks);
+        }
+
+        bool SortBlocks(IMyTerminalBlock block)
+        {
+            if (!block.IsSameConstructAs(Me)) return false;
+            if (block.CustomName.ToLower().Contains("friend") && block is IMyTextPanel)
             {
-                if (lcd.CustomName.ToLower().Contains("friend") && lcd.IsSameConstructAs(Me))
-                {
-                    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-                    lcd.BackgroundColor = Color.Black;
-                    friendLCDs.Add(lcd);
-                    if (!lcd.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.98:0.98";
-                }
-                else if (lcd.CustomName.ToLower().Contains("target") && lcd.IsSameConstructAs(Me))
-                {
-                    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-                    lcd.BackgroundColor = Color.Black;
-                    targetLCDs.Add(lcd);
-                    if (!lcd.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.7:0.98";
-                }
-                else if (lcd.CustomName.ToLower().Contains("radar") && lcd.IsSameConstructAs(Me))
-                {
-                    lcd.ContentType = ContentType.SCRIPT;
-                    lcd.BackgroundColor = Color.Black;
-                    radarLCDs.Add(lcd);
-                }
+                IMyTextPanel lcd = block as IMyTextPanel;
+                lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+                lcd.BackgroundColor = Color.Black;
+                friendLCDs.Add(lcd);
+                if (!block.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.98:0.98";              
             }
+            if (block.CustomName.ToLower().Contains("target") && block is IMyTextPanel)
+            {
+                IMyTextPanel lcd = block as IMyTextPanel;
+                lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+                lcd.BackgroundColor = Color.Black;
+                targetLCDs.Add(lcd);
+                if (!lcd.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.7:0.98";
+                return false;
+            }
+            else if (block.CustomName.ToLower().Contains("radar") && block is IMyTextPanel)
+            {
+                IMyTextPanel lcd = block as IMyTextPanel;
+                lcd.ContentType = ContentType.SCRIPT;
+                lcd.BackgroundColor = Color.Black;
+                radarLCDs.Add(lcd);
+                return false;
+            }
+            else if (block.CustomName.ToLower().Contains("status") && block is IMyTextPanel)
+            {
+                IMyTextPanel lcd = block as IMyTextPanel;
+                lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+                lcd.BackgroundColor = Color.Black;
+                statusLCDs.Add(lcd);
+                if (!lcd.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.98:0.3";
+                return false;
+            }
+            else if (block is IMyProgrammableBlock)
+            {
+                IMyProgrammableBlock progBlock = block as IMyProgrammableBlock;
+                progBlocks.Add(progBlock);
+            }
+            else if (wcapi.HasCoreWeapon(block))
+            {
+                turretsCount += 1;
+            }
+            else if (block is IMySoundBlock && block.CustomName.ToLower().Contains("alert"))
+            {
+                soundblocks.Add(block as IMySoundBlock);
+                return false;
+            }
+            var controller = block as IMyShipController;
+            if (controller != null)
+            {
+                allControllers.Add(controller);
+            }
+            return false;
         }
 
         class RadarSurface
