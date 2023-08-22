@@ -3,23 +3,43 @@
         // radar does NOT work with hudlcd
         // --Asmoww
 
-        double maxMs = 0.06;
+        // general settings
+        double maxMs = 0.3; // throttle the script if runtime exceeds this      
+
+        // gridlist settings
         bool sortByDistance = true; // sort by threat if disabled 
-        int closeDistance = 6000; // at what distance should colors start be applied to distance number
-        bool approachWarning = true; // warn for approaching grids with sound block
-        int approachDistance = 1500; // distance in meters, warn if grid is approaching in specified distance
-        int approachSpeed = 3; // speed in m/s, if approaching faster, warn
-        string warningSound = "SoundBlockAlert2";
-        int maxNameLenght = 25; // how long grid names are allowed to be displayed without cutting them off
+        int colorDistance = 6000; // at what distance should colors start be applied to distance number
+        int maxNameLenght = 25; // how long grid names are allowed to be without cutting them off
         int maxEntries = 15; // max amount of grids to display at a time
         bool displayEmpty = false; // make the lcds display no enemies or friendlies nearby
-        bool hideNonimportant = true; // hide not-so-important enemy grids, 1. threat level of 0.1 or lower  2. no movement or freely drifting
+        bool hideNonimportant = true; // hide not-so-important enemy grids, threat level of 0.1 or lower, no movement or freely drifting
+        bool approachWarning = true; // warn for approaching grids with sound block
+        int approachDistance = 1500; // distance in meters, warn if grid is approaching within specified distance
+        string warningSound = "SoundBlockAlert2";       
         Color friendColor = Color.Green;
         Color enemyColor = Color.IndianRed;
         Color targetingColor = Color.Orange;
 
+        // radar settings
+        bool drawQuadrants = false;
+        float projectionAngle = 50f;
+        float rangeOverride = 15000;
 
-        // code code code code code code code code code code code code code code code code
+        Color titleBarColor = new Color(50, 50, 50, 5);
+        Color backColor = new Color(0, 0, 0, 255);
+        Color lineColor = new Color(60, 60, 60, 10);
+        Color planeColor = new Color(50, 50, 50, 5);
+        Color enemyIconColor = new Color(150, 0, 0, 255);
+        Color enemyElevationColor = new Color(75, 0, 0, 100);
+        Color neutralIconColor = new Color(150, 150, 150, 255);
+        Color neutralElevationColor = new Color(75, 75, 75, 100);
+        Color allyIconColor = new Color(0, 150, 0, 255);
+        Color allyElevationColor = new Color(0, 75, 0, 100);
+        Color textColor = new Color(100, 100, 100, 100);
+        Color missileLockColor = new Color(0, 100, 100, 255);
+
+
+        // code below code below code below code below code below code below code below code below code below code below code below
 
 
         public static WcPbApi wcapi = new WcPbApi();
@@ -34,14 +54,11 @@
         bool soundPlayed = false;
         int tickNum = 0;
         double averageRuntime = 0;
-        static double tickSpeed = 0.1667; //seconds per tick
+        static double tickSpeed = 1/6; //seconds per tick
         IMyTerminalBlock reference;
-
-        float rangeOverride = 15000;
+       
         bool useRangeOverride = true;
         bool showAsteroids = false;
-        bool drawQuadrants = false;
-        float projectionAngle = 50f;
         float MaxRange
         {
             get
@@ -51,18 +68,6 @@
         }
 
         readonly RadarSurface radarSurface;
-        Color titleBarColor = new Color(50, 50, 50, 5);
-        Color backColor = new Color(0, 0, 0, 255);
-        Color lineColor = new Color(60, 60, 60, 10);
-        Color planeColor = new Color(50, 50, 50, 5);
-        Color enemyIconColor = new Color(150, 0, 0, 255);
-        Color enemyElevationColor = new Color(75, 0, 0, 100);
-        Color neutralIconColor = new Color(150, 150, 150, 255);
-        Color neutralElevationColor = new Color(75, 75, 75, 100);
-        Color allyIconColor = new Color(0, 150, 0, 255);
-        Color allyElevationColor = new Color(0, 75, 0, 100);
-        Color textColor = new Color(100, 100, 100, 100);
-        Color missileLockColor = new Color(0, 100, 100, 255);
         List<IMyShipController> allControllers = new List<IMyShipController>();
         IMyShipController lastActiveShipController = null;
 
@@ -214,25 +219,25 @@
                             }
                         }
 
-                        if (target.Distance <= closeDistance)
+                        if (target.Distance <= colorDistance)
                         {
                             target.DistanceColor = Color.Gray;
-                            if (target.Distance <= closeDistance - (closeDistance / 6)) target.DistanceColor = Color.LightGray;
-                            if (target.Distance <= closeDistance - (2 * closeDistance / 6)) target.DistanceColor = Color.LightYellow;
-                            if (target.Distance <= closeDistance - (3 * closeDistance / 6)) target.DistanceColor = Color.Yellow;
-                            if (target.Distance <= closeDistance - (4 * closeDistance / 6)) target.DistanceColor = Color.Orange;
-                            if (target.Distance <= closeDistance - (5 * closeDistance / 6)) target.DistanceColor = Color.Red;
+                            if (target.Distance <= colorDistance - (colorDistance / 6)) target.DistanceColor = Color.LightGray;
+                            if (target.Distance <= colorDistance - (2 * colorDistance / 6)) target.DistanceColor = Color.LightYellow;
+                            if (target.Distance <= colorDistance - (3 * colorDistance / 6)) target.DistanceColor = Color.Yellow;
+                            if (target.Distance <= colorDistance - (4 * colorDistance / 6)) target.DistanceColor = Color.Orange;
+                            if (target.Distance <= colorDistance - (5 * colorDistance / 6)) target.DistanceColor = Color.Red;
                         }
                         if(targetOutput.Count() <= maxEntries) targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
                     }
                     else
                     {
-                        if (target.Distance <= closeDistance)
+                        if (target.Distance <= colorDistance)
                         {
                             target.DistanceColor = Color.Gray;
-                            if (target.Distance <= closeDistance - (closeDistance / 6)) target.DistanceColor = Color.DarkGray;
-                            if (target.Distance <= closeDistance - (2 * closeDistance / 6)) target.DistanceColor = Color.LightGray;
-                            if (target.Distance <= closeDistance - (4 * closeDistance / 6)) target.DistanceColor = Color.White;
+                            if (target.Distance <= colorDistance - (colorDistance / 6)) target.DistanceColor = Color.DarkGray;
+                            if (target.Distance <= colorDistance - (2 * colorDistance / 6)) target.DistanceColor = Color.LightGray;
+                            if (target.Distance <= colorDistance - (4 * colorDistance / 6)) target.DistanceColor = Color.White;
                         }
                         string friendlyType = "";
                         if (target.Info.Name.ToString() == "")
@@ -242,6 +247,7 @@
                 }
                 catch { }
             }
+            targetOutput.Add(Math.Round(averageRuntime, 4).ToString() + "ms", 0);
             if (displayEmpty)
             {
                 if (targetOutput.Count() == 0) targetOutput.Add(ColorToColor(Color.DarkRed) + "No enemies :)", 0);
@@ -368,7 +374,7 @@
                         targetData.Color = enemyColor;
                         if (approachWarning && targetData.Distance < approachDistance && targetData.MyTarget == false && targetData.Info.Type != MyDetectedEntityType.CharacterHuman)
                         {
-                            if (targetData.ApproachSpeed > approachSpeed || targetData.Distance < (approachDistance / 2))
+                            if (targetData.ApproachSpeed > 3 || targetData.Distance < (approachDistance / 2))
                             {
                                 approaching = true;
                                 if (!soundPlayed)
