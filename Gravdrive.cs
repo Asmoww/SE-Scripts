@@ -1,14 +1,10 @@
-// set one cockpit as main, it's used for orientation
-
+        // set one cockpit as main, it's used for orientation
         // artificial masses should be near the center of mass, otherwise the drive will rotate the ship
-
         // spherical gens should only be place in front of or behind the artificial masses
         // - make sure to have an equal amount on both the front and back
         // - otherwise gravity drive will be disabled while shield is active to prevent unwanted movement
-
         // shield is toggled between modes with the argument "shield" or directly with "push", "pull" or "off"
         // gravity drive can be disabled with "drive", shield can still be used
-
         // name an LCD "Gdrive LCD" for use with hudlcd plugin
 
         // --------------- settings ---------------
@@ -196,8 +192,8 @@
             }
             if(gshield) TryWrite("\n<color=211,211,211,255>Shield: " + shieldString, true);
             if (blocks) TryWrite("\n<color=100,100,100,100>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString(), true);
-            if(runtime) TryWrite("\n<color=100,100,100,255>RT: " + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms", true);
-            if(efficiency) TryWrite("\n<color=100,100,100,255>Efficiency: " + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%", true);
+            if(runtime) TryWrite("\n<color=100,100,100,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms", true);
+            if(efficiency) TryWrite("\n<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%", true);
 
             if (nocontinue) return;
 
