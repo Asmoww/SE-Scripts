@@ -247,7 +247,6 @@
                 }
                 catch { }
             }
-            targetOutput.Add(Math.Round(averageRuntime, 4).ToString() + "ms", 0);
             if (displayEmpty)
             {
                 if (targetOutput.Count() == 0) targetOutput.Add(ColorToColor(Color.DarkRed) + "No enemies :)", 0);
