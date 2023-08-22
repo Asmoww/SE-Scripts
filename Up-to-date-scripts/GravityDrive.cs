@@ -112,7 +112,12 @@
                 GetBlocks(true);
             }
 
-            if (waitTillErrorFixed) return;
+            if (waitTillErrorFixed)
+            {
+                SendStatus("<color=255,0,0,255>GDRIVE ERROR: Check PB for more info!");
+                WriteStatus();
+                return;
+            }
 
             Echo("Gravity generators: " + gens.Count.ToString() + " + " + spheres.Count.ToString() + "s");
             Echo("Artificial masses: " + masses.Count.ToString());
@@ -480,7 +485,7 @@
                 {
                     Echo("No working gravity generators were found.");
                     waitTillErrorFixed = true;
-                }
+                }              
                 foreach (IMyArtificialMassBlock mass in masses)
                 {
                     massCenterVector += -Vector3D.TransformNormal(mass.GetPosition() - cockpit.CenterOfMass, MatrixD.Transpose(cockpit.WorldMatrix));
