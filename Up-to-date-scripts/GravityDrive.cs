@@ -17,7 +17,6 @@
 
         int lowestSpeed = 0; // dampening will be disabled below this speed (incase the ship keeps moving when trying to come to a stop)
         bool autoFieldSize = true;// automatically set the field size of the gravity generators
-        int checkEveryTicks = 30; // how often to check for changes in blocks such as damage (in ticks)
         bool keepDriveOn = true; // keep drive on while shield is on, will be disabled automatically if spherical gens aren't balanced correctly
 
         // which info to display on status lcd 
@@ -105,7 +104,7 @@
             }
 
             tickNum++;
-            if (tickNum == checkEveryTicks)
+            if (tickNum == 30)
             {
                 tickNum = 0;
                 SetFieldSize();
@@ -114,8 +113,11 @@
 
             if (waitTillErrorFixed)
             {
-                SendStatus("<color=255,0,0,255>GDRIVE ERROR: Check PB for more info!");
-                WriteStatus();
+                if (tickNum == 0 || tickNum == 10 || tickNum == 20)
+                {
+                    SendStatus("<color=255,0,0,255>GDRIVE ERROR: Check PB for more info!");
+                    WriteStatus();
+                }
                 return;
             }
 
@@ -127,17 +129,19 @@
             Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms");
 
             nocontinue = false;
+            string effString = "";
+            string driveString = "";
 
             if ((spheres.Count > 0 && shield != 0 && !SpheresEqual()) || (gens.Count == 0 && shield != 0) || drive == 0 || (shield != 0 && !keepDriveOn) || masses.Count == 0)
             {
                 if (spheres.Count == 0 || shield == 0 || drive == 0 || masses.Count == 0)
                 {
-                    if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=139,0,0,255>Off");
+                    driveString = "<color=211,211,211,255>Drive: <color=139,0,0,255>Off";
                     Echo("Velocity: ---\nStatus: Off");
                 }
                 else
                 {
-                    if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=0,139,139,255>Shield");
+                     driveString = "<color=211,211,211,255>Drive: <color=0,139,139,255>Shield";
                     Echo("Velocity: ---\nStatus: Shield");
                 }
                 PowerOnOff(false);
@@ -145,14 +149,14 @@
             }
             else if (Math.Round(cockpit.GetShipSpeed(), 2) == 0 && NoPilotInput())
             {
-                if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=173,216,230,255>Standby");
+                driveString = "<color=211,211,211,255>Drive: <color=173,216,230,255>Standby";
                 Echo("Velocity: ---\nStatus: Standby");
                 PowerOnOff(false);
                 nocontinue = true;
             }
             else if (!cockpit.DampenersOverride && NoPilotInput())
             {
-                if (gdrive) SendStatus("<color=211,211,211,255>Drive: <color=160,160,0,160>Drifting");
+                driveString = "<color=211,211,211,255>Drive: <color=160,160,0,160>Drifting";
                 Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: Drifting");
                 PowerOnOff(false);
                 nocontinue = true;
@@ -164,7 +168,7 @@
                 {
                     status = "<color=139,0,0,255>Braking";
                 }
-                if (gdrive) SendStatus("<color=211,211,211,255>Drive: " + status);
+                driveString = "<color=211,211,211,255>Drive: " + status;
                 Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: " + status);
                 PowerOnOff(true);
             }
@@ -174,12 +178,15 @@
                 shieldString = "<color=139,0,0,255>Off";
                 shield = 0;
             }
-            string effString = "";
-            if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
-            if (gshield) SendStatus("<color=211,211,211,255>Shield: " + shieldString);
-            if (blocks) SendStatus(effString+" <color=70,70,70,255>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString());
-            if (runtime) SendStatus("<color=100,100,100,255>GD <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms");
-            WriteStatus();
+            if (tickNum == 0 || tickNum == 10 || tickNum == 20)
+            {
+                if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
+                if (gdrive) SendStatus(driveString);
+                if (gshield) SendStatus("<color=211,211,211,255>Shield: " + shieldString);
+                if (blocks) SendStatus(effString + " <color=70,70,70,255>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString());
+                if (runtime) SendStatus("<color=100,100,100,255>GD <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms");
+                WriteStatus();
+            }
 
             if (nocontinue) return;
 
@@ -223,7 +230,7 @@
                 {
                     sphere.GravityAcceleration = (float)-((moveInd.Z - velVect.Z) * IsFrontOrBack(sphere));
                 }
-            }          
+            }
         }
 
         List<string> statusList = new List<string>();
@@ -243,7 +250,7 @@
             {
                 foreach (IMyTextSurface lcd in statusLCDs)
                 {
-                    try   {lcd.WriteText(StatusToWrite());}
+                    try { lcd.WriteText(StatusToWrite()); }
                     catch { }
                 }
             }
@@ -457,7 +464,7 @@
                 GridTerminalSystem.GetBlocksOfType(progBlocks);
                 GridTerminalSystem.GetBlocksOfType(spheres);
                 GridTerminalSystem.GetBlocksOfType(masses);
-                GridTerminalSystem.GetBlocksOfType(gens);               
+                GridTerminalSystem.GetBlocksOfType(gens);
 
                 for (int i = 0; i < masses.Count; i++)
                 {
@@ -485,7 +492,7 @@
                 {
                     Echo("No working gravity generators were found.");
                     waitTillErrorFixed = true;
-                }              
+                }
                 foreach (IMyArtificialMassBlock mass in masses)
                 {
                     massCenterVector += -Vector3D.TransformNormal(mass.GetPosition() - cockpit.CenterOfMass, MatrixD.Transpose(cockpit.WorldMatrix));
