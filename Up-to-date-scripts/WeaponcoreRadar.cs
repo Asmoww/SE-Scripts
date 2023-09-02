@@ -323,10 +323,14 @@
                             if (target.Distance <= colorDistance - (2 * colorDistance / 6)) target.DistanceColor = Color.LightGray;
                             if (target.Distance <= colorDistance - (4 * colorDistance / 6)) target.DistanceColor = Color.White;
                         }
-                        string friendlyType = "";
                         if (target.Info.Name.ToString() == "")
-                            friendlyType = "Suit";
-                        if (friendOutput.Count() <= maxEntries) friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + friendlyType, sorter);
+                        {
+                            if (friendOutput.Count() <= maxEntries) friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + " Suit", sorter);
+                        }
+                        else
+                        {
+                            if (friendOutput.Count() <= maxEntries) friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                        }
                     }
                 }
                 catch { }
