@@ -10,12 +10,12 @@
         int statusPriority = 2; // lower number = higher up on the status lcd, all scripts need to have a different number
 
         // gridlist settings
+        bool hideNonimportant = true; // hide not-so-important enemy grids, MIGHT HIDE TORPEDOES AND OTHER SMALL SHIPS IF THEY HAVE IDENTICAL NAMES
         bool sortByDistance = true; // sort by threat if disabled 
         int colorDistance = 6000; // at what distance should colors start be applied to distance number
         int maxNameLenght = 25; // how long grid names are allowed to be without cutting them off
         int maxEntries = 15; // max amount of grids to display at a time
         bool displayEmpty = false; // make the lcds display no enemies or friendlies nearby
-        bool hideNonimportant = true; // hide not-so-important enemy grids, threat level of 0.1 or lower, no movement or freely drifting
         bool approachWarning = true; // warn for approaching grids with sound block
         int approachDistance = 1500; // distance in meters, warn if grid is approaching within specified distance
         string warningSound = "SoundBlockAlert2";
@@ -27,7 +27,6 @@
         bool drawQuadrants = false;
         float projectionAngle = 50f;
         float rangeOverride = 15000;
-
         Color titleBarColor = new Color(50, 50, 50, 5);
         Color backColor = new Color(0, 0, 0, 255);
         Color lineColor = new Color(60, 60, 60, 10);
@@ -42,10 +41,15 @@
         Color missileLockColor = new Color(0, 100, 100, 255);
 
         // which info to display on status lcd 
-
         bool runtime = true;
+        bool hideStatus = true; // whether script is hiding non important scripts
+
+
 
         // code below code below code below code below code below code below code below code below code below code below code below
+        // code below code below code below code below code below code below code below code below code below code below code below
+        // code below code below code below code below code below code below code below code below code below code below code below
+
 
 
         public static WcPbApi wcapi = new WcPbApi();
@@ -114,7 +118,7 @@
         public Program()
         {
             Echo("Starting...");
-            radarSurface = new RadarSurface(titleBarColor, backColor, lineColor, planeColor, textColor, missileLockColor, projectionAngle, MaxRange, drawQuadrants);          
+            radarSurface = new RadarSurface(titleBarColor, backColor, lineColor, planeColor, textColor, missileLockColor, projectionAngle, MaxRange, drawQuadrants);
             try
             {
                 wcapi.Activate(Me);
@@ -130,6 +134,15 @@
 
         public void Main(string argument, UpdateType updateSource)
         {
+            if(argument != null)
+            {
+                switch(argument)
+                {
+                    case "hide":
+                        hideNonimportant = !hideNonimportant;
+                        break;
+                }
+            }
             tickNum++;
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
             if (averageRuntime > maxMs * 0.9)
@@ -140,8 +153,8 @@
             {
                 GetBlocks();
                 tickNum = 0;
-            }           
-            if(turretsCount < 1)
+            }
+            if (turretsCount < 1)
             {
                 Echo("ERROR: No WC weapon found,");
                 Echo("please add one to continue.");
@@ -164,12 +177,15 @@
             {
                 UpdateLCDs();
             }
-            if(radarLCDs.Count > 0) radarSurface.SortContacts();
+            if (radarLCDs.Count > 0) radarSurface.SortContacts();
             foreach (IMyTextSurface lcd in radarLCDs)
-            {              
+            {
                 radarSurface.DrawRadar(lcd, false);
             }
-            if (runtime) SendStatus("<color=100,100,100,255>RDR <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " +maxMs.ToString() +" ms");
+            if (runtime) SendStatus("<color=100,100,100,255>RDR <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms");
+            string hideString = "<color=139,0,0,255>Off";
+            if (hideNonimportant) hideString = "<color=0,128,0,255>On";
+            if (hideStatus) SendStatus("<color=100,100,100,255>Hide grids: " + hideString);
             WriteStatus();
         }
 
@@ -177,7 +193,7 @@
         static List<IMyProgrammableBlock> progBlocks = new List<IMyProgrammableBlock>();
         void SendStatus(string status)
         {
-            statusList.Add(status);           
+            statusList.Add(status);
         }
         void WriteStatus()
         {
@@ -198,9 +214,9 @@
         }
         bool StatusHighestPriority()
         {
-            foreach(IMyProgrammableBlock prog in progBlocks)
+            foreach (IMyProgrammableBlock prog in progBlocks)
             {
-                if(prog.CustomData.StartsWith("statuspriority€") && prog.IsSameConstructAs(Me))
+                if (prog.CustomData.StartsWith("statuspriority€") && prog.IsSameConstructAs(Me))
                 {
                     int priority = -1;
                     int.TryParse(prog.CustomData.Split('€')[1], out priority);
@@ -217,9 +233,9 @@
             string tempToWrite = "";
             Dictionary<IMyProgrammableBlock, int> progBlocksTemp = new Dictionary<IMyProgrammableBlock, int>();
             IOrderedEnumerable<KeyValuePair<IMyProgrammableBlock, int>> sortedProgs;
-            foreach(IMyProgrammableBlock prog in progBlocks)
+            foreach (IMyProgrammableBlock prog in progBlocks)
             {
-                if(!prog.CustomData.StartsWith("statuspriority€") || !prog.IsSameConstructAs(Me))
+                if (!prog.CustomData.StartsWith("statuspriority€") || !prog.IsSameConstructAs(Me))
                 {
                     progBlocks.Remove(prog);
                 }
@@ -228,11 +244,11 @@
                     progBlocksTemp.Add(prog, Int32.Parse(prog.CustomData.Split('€')[1]));
                 }
             }
-            
+
             sortedProgs = (from entry in progBlocksTemp orderby entry.Value ascending select entry);
             foreach (KeyValuePair<IMyProgrammableBlock, int> prog in sortedProgs.ToList())
             {
-                if(prog.Key.CustomData.StartsWith("statuspriority€"))
+                if (prog.Key.CustomData.StartsWith("statuspriority€"))
                 {
                     tempToWrite = tempToWrite + prog.Key.CustomData.Split('€')[2];
                 }
@@ -242,6 +258,9 @@
 
         Dictionary<String, double> targetOutput = new Dictionary<String, double>();
         Dictionary<String, double> friendOutput = new Dictionary<String, double>();
+        int enemyHiddenCount = 0;
+        int friendlyHiddenCount = 0;
+        List<string> friendAdded = new List<string>();
 
         static List<IMyTextSurface> targetLCDs = new List<IMyTextSurface>();
         static List<IMyTextSurface> friendLCDs = new List<IMyTextSurface>();
@@ -252,6 +271,7 @@
         {
             GetAllTargets();
             ClearAll();
+
 
             foreach (var obj in targetDataDict)
             {
@@ -295,14 +315,11 @@
 
                     if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
                     {
-                        if (prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && hideNonimportant)
+                        if (((prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) || DuplicateName(target.Info.Name)) && hideNonimportant && target.Threat < 0.1)
                         {
-                            if (target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key] && target.Threat < 0.1)
-                            {
-                                continue;
-                            }
+                            enemyHiddenCount += 1;
+                            continue;
                         }
-
                         if (target.Distance <= colorDistance)
                         {
                             target.DistanceColor = Color.Gray;
@@ -312,10 +329,23 @@
                             if (target.Distance <= colorDistance - (4 * colorDistance / 6)) target.DistanceColor = Color.Orange;
                             if (target.Distance <= colorDistance - (5 * colorDistance / 6)) target.DistanceColor = Color.Red;
                         }
-                        if (targetOutput.Count() <= maxEntries) targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                        if (targetOutput.Count() <= maxEntries)
+                        {
+                            targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                        }
+                        else
+                        {
+                            enemyHiddenCount += 1;
+                        }
                     }
                     else
                     {
+                        if (((prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) || DuplicateName(target.Info.Name)) && hideNonimportant && target.Color == Color.White && target.Threat < 0.1 && !friendAdded.Contains(target.Info.Name))
+                        {
+                            friendlyHiddenCount += 1;
+                            continue;
+                        }
+                        friendAdded.Add(target.Info.Name);
                         if (target.Distance <= colorDistance)
                         {
                             target.DistanceColor = Color.Gray;
@@ -325,11 +355,18 @@
                         }
                         if (target.Info.Name.ToString() == "")
                         {
-                            if (friendOutput.Count() <= maxEntries) friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + " Suit", sorter);
+                            friendOutput.Add(ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + ColorToColor(Color.Green) + " Suit", sorter);
                         }
                         else
                         {
-                            if (friendOutput.Count() <= maxEntries) friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                            if (friendOutput.Count() <= maxEntries)
+                            {
+                                friendOutput.Add(ColorToColor(target.Color) + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                            }
+                            else
+                            {
+                                friendlyHiddenCount += 1;
+                            }
                         }
                     }
                 }
@@ -340,8 +377,22 @@
                 if (targetOutput.Count() == 0) targetOutput.Add(ColorToColor(Color.DarkRed) + "No enemies :)", 0);
                 if (friendOutput.Count() == 0) friendOutput.Add(ColorToColor(Color.DarkGreen) + "No friends :(", 0);
             }
+            if (enemyHiddenCount > 0) targetOutput.Add(ColorToColor(Color.Gray) + "+ " + enemyHiddenCount.ToString() + " hidden", 9999999999999);
+            if (friendlyHiddenCount > 0) friendOutput.Add(ColorToColor(Color.Gray) + "+ " + friendlyHiddenCount.ToString() + " hidden", 9999999999999);
             WriteLcd(targetOutput, targetLCDs);
             WriteLcd(friendOutput, friendLCDs);
+        }
+
+        bool DuplicateName(string name)
+        {
+            foreach (var obj in targetDataDict)
+            {
+                if(obj.Value.Info.Name == name)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         void ClearAll()
@@ -356,6 +407,9 @@
             }
             targetOutput.Clear();
             friendOutput.Clear();
+            enemyHiddenCount = 0;
+            friendlyHiddenCount = 0;
+            friendAdded.Clear();
         }
 
         void WriteLcd(Dictionary<String, double> outputDict, List<IMyTextSurface> lcdList)
@@ -385,7 +439,7 @@
             radarSurface.ClearContacts();
             approaching = false;
             if (targetDataDict.Count > 0)
-            { 
+            {
                 foreach (var item in targetDataDict)
                 {
                     prevVelocities[item.Key] = item.Value.Info.Velocity;
@@ -509,7 +563,7 @@
                 temp[targetData.Info.EntityId] = targetData;
                 radarSurface.AddContact(targetData.Info.Position, reference.WorldMatrix, targetData.Info.Type, targetData.Color, targetData.Color, targetData.Info.Name, relation, targetData.MyTarget, targetData.Distance, targetData.Info.Velocity, targetData.Threat);
             }
-           
+
             targetDataDict.Clear();
             foreach (var item in temp)
                 targetDataDict[item.Key] = item.Value;
@@ -576,7 +630,7 @@
                 lcd.ContentType = ContentType.TEXT_AND_IMAGE;
                 lcd.BackgroundColor = Color.Black;
                 friendLCDs.Add(lcd);
-                if (!block.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.98:0.98";              
+                if (!block.CustomData.Contains("hudlcd")) lcd.CustomData = "hudlcd:-0.98:0.98";
             }
             if (block.CustomName.ToLower().Contains("target") && block is IMyTextPanel)
             {
