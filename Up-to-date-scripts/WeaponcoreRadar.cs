@@ -134,7 +134,7 @@
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if(argument != null)
+            if(argument != "")
             {
                 switch(argument)
                 {
@@ -261,6 +261,7 @@
         int enemyHiddenCount = 0;
         int friendlyHiddenCount = 0;
         List<string> friendAdded = new List<string>();
+        List<string> enemyAdded = new List<string>();
 
         static List<IMyTextSurface> targetLCDs = new List<IMyTextSurface>();
         static List<IMyTextSurface> friendLCDs = new List<IMyTextSurface>();
@@ -315,11 +316,21 @@
 
                     if (target.Info.Relationship == MyRelationsBetweenPlayerAndBlock.Enemies)
                     {
-                        if (((prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) || DuplicateName(target.Info.Name)) && hideNonimportant && target.Threat < 0.1)
+                        if (((prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) || DuplicateName(target.Info.Name)) && hideNonimportant && target.Threat < 0.1 && enemyAdded.Contains(target.Info.Name))
                         {
                             enemyHiddenCount += 1;
                             continue;
                         }
+                        int enemyDuplicateNum = 0;
+                        if (enemyAdded.Contains(target.Info.Name))
+                        {
+                            foreach (string name in enemyAdded)
+                            {
+                                if (name == target.Info.Name) enemyDuplicateNum += 1;
+                            }
+                            tempTargetName = ColorToColor(Color.Gray) + "("+(enemyDuplicateNum + 1).ToString() + ") " + ColorToColor(target.Color) + tempTargetName;
+                        }
+                        enemyAdded.Add(target.Info.Name);
                         if (target.Distance <= colorDistance)
                         {
                             target.DistanceColor = Color.Gray;
@@ -329,21 +340,37 @@
                             if (target.Distance <= colorDistance - (4 * colorDistance / 6)) target.DistanceColor = Color.Orange;
                             if (target.Distance <= colorDistance - (5 * colorDistance / 6)) target.DistanceColor = Color.Red;
                         }
-                        if (targetOutput.Count() <= maxEntries)
+                        if (warning == "Suit")
                         {
-                            targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                            targetOutput.Add(ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + ColorToColor(Color.Red) + " Suit", sorter);
                         }
                         else
                         {
-                            enemyHiddenCount += 1;
+                            if (targetOutput.Count() <= maxEntries)
+                            {
+                                targetOutput.Add(ColorToColor(target.Color) + warning + " " + tempTargetName.ToString() + " " + ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km", sorter);
+                            }
+                            else
+                            {
+                                enemyHiddenCount += 1;
+                            }
                         }
                     }
                     else
                     {
-                        if (((prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) || DuplicateName(target.Info.Name)) && hideNonimportant && target.Color == Color.White && target.Threat < 0.1 && !friendAdded.Contains(target.Info.Name))
+                        if (((prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) || DuplicateName(target.Info.Name)) && hideNonimportant && target.Color == Color.White && target.Threat < 0.1 && friendAdded.Contains(target.Info.Name))
                         {
                             friendlyHiddenCount += 1;
                             continue;
+                        }
+                        int friendDuplicateNum = 0;
+                        if (friendAdded.Contains(target.Info.Name))
+                        { 
+                            foreach(string name in friendAdded)
+                            {
+                                if (name == target.Info.Name) friendDuplicateNum += 1;
+                            }
+                            tempTargetName = ColorToColor(Color.Gray) + "(" + (friendDuplicateNum + 1).ToString() + ") " + ColorToColor(target.Color) + tempTargetName;
                         }
                         friendAdded.Add(target.Info.Name);
                         if (target.Distance <= colorDistance)
@@ -355,7 +382,7 @@
                         }
                         if (target.Info.Name.ToString() == "")
                         {
-                            friendOutput.Add(ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + ColorToColor(Color.Green) + " Suit", sorter);
+                            friendOutput.Add(ColorToColor(target.DistanceColor) + Math.Round(target.Distance / 1000, 2).ToString() + "km" + ColorToColor(Color.LimeGreen) + " Suit", sorter);
                         }
                         else
                         {
@@ -410,6 +437,7 @@
             enemyHiddenCount = 0;
             friendlyHiddenCount = 0;
             friendAdded.Clear();
+            enemyAdded.Clear();
         }
 
         void WriteLcd(Dictionary<String, double> outputDict, List<IMyTextSurface> lcdList)
