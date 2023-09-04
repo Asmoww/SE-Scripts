@@ -43,6 +43,7 @@
         static List<IMyTextPanel> allLCDs = new List<IMyTextPanel>();
         static List<IMyTextSurface> statusLCDs = new List<IMyTextSurface>();
         bool nocontinue = false;
+        string scriptRunningChar = @" / ";
 
         public Program()
         {
@@ -141,7 +142,7 @@
                 }
                 else
                 {
-                     driveString = "<color=211,211,211,255>Drive: <color=0,139,139,255>Shield";
+                    driveString = "<color=211,211,211,255>Drive: <color=0,139,139,255>Shield";
                     Echo("Velocity: ---\nStatus: Shield");
                 }
                 PowerOnOff(false);
@@ -180,11 +181,13 @@
             }
             if (tickNum == 0 || tickNum == 10 || tickNum == 20)
             {
+                if (scriptRunningChar == @" [ ") scriptRunningChar = @" ) ";
+                else scriptRunningChar = @" [ ";
                 if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
                 if (gdrive) SendStatus(driveString);
                 if (gshield) SendStatus("<color=211,211,211,255>Shield: " + shieldString);
                 if (blocks) SendStatus(effString + " <color=70,70,70,255>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString());
-                if (runtime) SendStatus("<color=100,100,100,255>GD <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " / " + maxMs.ToString() + " ms");
+                if (runtime) SendStatus("<color=100,100,100,255>GD <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + scriptRunningChar + maxMs.ToString() + " ms");
                 WriteStatus();
             }
 
