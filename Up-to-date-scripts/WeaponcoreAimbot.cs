@@ -7,6 +7,7 @@
 
         // Blocks needed: cockpit, weaponcore turret (or doppler radar)
 
+        // Turn aimbot on/off with the argument "aim"
         // Name an LCD "status lcd" to broadcast misc. info to hudlcd, multiple scripts can use the same status lcd
 
         // general settings
