@@ -1,4 +1,4 @@
-        // AIM version 1.0
+        // AIM version 1.01
         // Aimbot based off of Skunkbot (Grunkbot)
 
         // Due to Keen being stupid, having a lot of gyros quickly eats runtime
