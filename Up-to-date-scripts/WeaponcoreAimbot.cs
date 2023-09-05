@@ -7,7 +7,8 @@
 
         // Blocks needed: cockpit, weaponcore turret (or doppler radar)
 
-        // Turn aimbot on/off with the argument "aim"
+        // Use the argument "aim" to toggle aimbot on and off
+
         // Name an LCD "status lcd" to broadcast misc. info to hudlcd, multiple scripts can use the same status lcd
 
         // general settings
@@ -39,6 +40,7 @@
         double averageRuntime = 0;
         bool standby = false;
         bool error = false;
+        bool seeking = false;
 
         const double DEF_SMALL_GRID_P = 40; // The default proportional gain of small grid gyroscopes
         const double DEF_SMALL_GRID_I = 0; // The default integral gain of small grid gyroscopes
@@ -115,6 +117,7 @@
                 }
             }
             standby = false;
+            seeking = false;
             tickNum++;
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs * 0.01);
             if (averageRuntime > maxMs * 0.9)
@@ -138,6 +141,7 @@
                     if (runtime) SendStatus("<color=100,100,100,255>" + scriptNameVersion + " <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " ms" + scriptRunningChar);
                     string aimString = "<color=139,0,0,255>Off";
                     if (botactivated) aimString = "<color=0,128,0,255>Locked";
+                    if (seeking) aimString = "<color=160,160,0,160>Seeking";
                     if (standby) aimString = "<color=173,216,230,255>Standby";
                     if (aimAssist) SendStatus("<color=211,211,211,255>Aimbot: " + aimString);
                     WriteStatus();
@@ -246,6 +250,7 @@
                 } while (Math.Abs(time - oldTime) > (0.01 * oldTime));
                 lastTargetSpeed = targetSpeed;
                 aimDirection = Vector3D.Normalize(Vector3D.TransformNormal(aimDirection, refLookAtMatrix));
+                if(Math.Abs(Math.Abs(aimDirection.Sum)-1) > 0.05) seeking = true;
                 AimAtTarget(aimDirection);
             }
             else
