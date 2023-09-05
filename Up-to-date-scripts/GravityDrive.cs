@@ -1,3 +1,5 @@
+        // GDV 1.21
+
         // set one cockpit as main, it's used for orientation
         // artificial masses should be near the center of mass, otherwise the drive will rotate the ship
         // spherical gens should only be placed in front of or behind the artificial masses
@@ -21,11 +23,11 @@
 
         // which info to display on status lcd 
 
+        bool runtime = true;
         bool gdrive = true;
         bool gshield = true;
-        bool blocks = true;
-        bool efficiency = true; // efficiency loss from natural gravity    
-        bool runtime = true;
+        bool blocks = false;
+        bool efficiency = false; // efficiency loss from natural gravity    
 
 
         // code below code below code below code below code below code below code below code below code below code below code below
@@ -104,13 +106,7 @@
                 return;
             }
 
-            tickNum++;
-            if (tickNum == 30)
-            {
-                tickNum = 0;
-                SetFieldSize();
-                GetBlocks(true);
-            }
+            tickNum++;           
 
             if (waitTillErrorFixed)
             {
@@ -179,16 +175,23 @@
                 shieldString = "<color=139,0,0,255>Off";
                 shield = 0;
             }
-            if (tickNum == 0 || tickNum == 10 || tickNum == 20)
+            if (tickNum % 10 == 0)
             {
-                if (scriptRunningChar == @" [ ") scriptRunningChar = @" ) ";
-                else scriptRunningChar = @" [ ";
-                if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
+                if (runtime) SendStatus("<color=100,100,100,255>GDV <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " ms" + scriptRunningChar);
                 if (gdrive) SendStatus(driveString);
                 if (gshield) SendStatus("<color=211,211,211,255>Shield: " + shieldString);
+                if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
                 if (blocks) SendStatus(effString + " <color=70,70,70,255>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString());
-                if (runtime) SendStatus("<color=100,100,100,255>GD <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + scriptRunningChar + maxMs.ToString() + " ms");
                 WriteStatus();
+            }
+
+            if (tickNum == 60)
+            {
+                if (scriptRunningChar == @" / ") scriptRunningChar = @" \ ";
+                else scriptRunningChar = @" / ";
+                tickNum = 0;
+                SetFieldSize();
+                GetBlocks(true);
             }
 
             if (nocontinue) return;
