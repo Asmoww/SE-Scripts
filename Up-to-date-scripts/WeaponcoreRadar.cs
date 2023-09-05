@@ -1,3 +1,5 @@
+        // RDR version 1.32
+
         // lists nearby grids to lcds and includes whips modified weaponcore radar
         // name LCDs "Friend LCD", "Target LCD" and "Radar LCD" (non case sensitive)
         // friend and target lcd can be combined by naming the lcd "Friend Target LCD"
@@ -64,6 +66,7 @@
         bool soundPlayed = false;
         int tickNum = 0;
         string scriptRunningChar = @" / ";
+        string scriptNameVersion = "RDR";
         double averageRuntime = 0;
         static double tickSpeed = 1 / 6; //seconds per tick
         IMyTerminalBlock reference;
@@ -150,11 +153,6 @@
             {
                 return;
             }
-            if (tickNum == 30)
-            {
-                GetBlocks();
-                tickNum = 0;
-            }
             if (turretsCount < 1)
             {
                 Echo("ERROR: No WC weapon found,");
@@ -182,14 +180,22 @@
             foreach (IMyTextSurface lcd in radarLCDs)
             {
                 radarSurface.DrawRadar(lcd, false);
+            }           
+            if(tickNum % 6 == 0)
+            {
+                if (scriptRunningChar == @" / ") scriptRunningChar = @" \ ";
+                else scriptRunningChar = @" / ";
             }
-            if(scriptRunningChar == @" [ ") scriptRunningChar = @" ) ";
-            else scriptRunningChar = @" [ ";
-            if (runtime) SendStatus("<color=100,100,100,255>RDR <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + scriptRunningChar + maxMs.ToString() + " ms");
+            if (runtime) SendStatus("<color=100,100,100,255>"+scriptNameVersion+" <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() +" ms"+ scriptRunningChar);
             string hideString = "<color=139,0,0,255>Off";
             if (hideNonimportant) hideString = "<color=0,128,0,255>On";
-            if (hideStatus) SendStatus("<color=100,100,100,255>Hide grids: " + hideString);
+            if (hideStatus) SendStatus("<color=211,211,211,255>Hide grids: " + hideString);
             WriteStatus();
+            if (tickNum == 30)
+            {
+                GetBlocks();
+                tickNum = 0;
+            }
         }
 
         List<string> statusList = new List<string>();
@@ -361,9 +367,9 @@
                     }
                     else
                     {
-                        if(hideNonimportant && target.Color == Color.White && target.Threat < 0.1)
+                        if (hideNonimportant && target.Color == Color.White && target.Threat < 0.1)
                         {
-                            if (friendOutput.Count() >= maxEntries || 
+                            if (friendOutput.Count() >= maxEntries ||
                                 (prevVelocities.ContainsKey(obj.Key) && prevAngles.ContainsKey(obj.Key) && target.Info.Velocity == prevVelocities[obj.Key] && target.Info.Orientation == prevAngles[obj.Key]) ||
                                 (DuplicateName(target.Info.Name) && (friendAdded.Contains(target.Info.Name) || DuplicateEnemy(target.Info.Name))))
                             {
