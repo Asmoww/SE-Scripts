@@ -1,6 +1,11 @@
-        float weldingRPM = 0.05f; // how fast rotor spins when weldind, recommended 0 or a very low number like 0.03
-        float idleRPM = 0.5f; // how fast the rotor should spin when not welding, recommended 0.4 or lower
-        int weldTickDuration = 20; // 6 ticks = second, for how many ticks to use weldingRPM when welding is detected
+        // use the following arguments:
+        // start - starts the printer, turns on welders etc.
+        // pause - pauses and continues welding
+        // skip - skips layer, can be used after starting to get back to correct layer
+
+        float weldingRPM = 0.07f; // how fast rotor spins when weldind, recommended 0 or a very low number like 0.03
+        float idleRPM = 0.6f; // how fast the rotor should spin when not welding, recommended 0.4 or lower
+        int weldTickDuration = 25; // 6 ticks = second, for how many ticks to use weldingRPM when welding is detected
         int passesPerLayer = 1; // how many times the printer should spin before starting next layer, 1 is probably enough if weldTickDuration is high enough, and weldingRPM low enough
 
         double maxMs = 0.3;
@@ -29,6 +34,7 @@
         int currentPass = 0;
         bool printing = false;
         bool firstStart = true;
+        bool pause = false;
 
         public void Main(string argument, UpdateType updateSource)
         {
@@ -39,9 +45,27 @@
                     case "start":
                         StartPrinting();
                         break;
-                    case "stop":
-                        printing = false;
-                        break;
+                    case "pause":
+                        printing = !printing;
+                        pause = !pause;
+                        if(!pause)
+                        {
+                            foreach(IMyShipWelder w in welders)
+                            {
+                                w.Enabled = true;
+                            }
+                        }
+                        else
+                        {
+                            if (!pause)
+                            {
+                                foreach (IMyShipWelder w in welders)
+                                {
+                                    w.Enabled = false;
+                                }
+                            }
+                        }
+                        break;                  
                     case "skip":
                         if(printing) NewLayer();
                         break;
@@ -121,6 +145,7 @@
                     if (rotor.Angle > lastRotorAngle || newLayer) lastRotorAngle = rotor.Angle;
                 }
             }
+            else if(pause) SendStatus("Paused.");
             else SendStatus("Idle.");
 
             if (tickNum % 5 == 0) lastInvMass = CurrentInvMass();
@@ -331,7 +356,8 @@
         {
             if (block.HasInventory)
             {
-                inventoryBlocks.Add(block);
+                if (block is IMyReactor) Echo("reactor");
+                else inventoryBlocks.Add(block);
             }
             else if (block is IMyPistonBase)
             {
