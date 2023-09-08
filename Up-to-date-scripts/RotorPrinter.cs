@@ -3,9 +3,9 @@
         // pause - pauses and continues welding
         // skip - skips layer, can be used after starting to get back to correct layer
 
-        float weldingRPM = 0.07f; // how fast rotor spins when weldind, recommended 0 or a very low number like 0.03
+        float weldingRPM = 0.15f; // how fast rotor spins when weldind, recommended 0 or a very low number like 0.03
         float idleRPM = 0.6f; // how fast the rotor should spin when not welding, recommended 0.4 or lower
-        int weldTickDuration = 25; // 6 ticks = second, for how many ticks to use weldingRPM when welding is detected
+        int weldTickDuration = 20; // 6 ticks = second, for how many ticks to use weldingRPM when welding is detected
         int passesPerLayer = 1; // how many times the printer should spin before starting next layer, 1 is probably enough if weldTickDuration is high enough, and weldingRPM low enough
 
         double maxMs = 0.3;
@@ -363,7 +363,7 @@
             {
                 pistons.Add(block as IMyPistonBase);
             }
-            else if (block is IMyMotorStator)
+            else if (block is IMyMotorStator && block.CustomName.ToLower().Contains("welder"))
             {
                 rotor = block as IMyMotorStator;
             }
