@@ -1,4 +1,4 @@
-        // RDR version 1.32
+        // RDR version 1.33
 
         // lists nearby grids to lcds and includes whips modified weaponcore radar
         // name LCDs "Friend LCD", "Target LCD" and "Radar LCD" (non case sensitive)
@@ -72,6 +72,7 @@
         IMyTerminalBlock reference;
         int turretsCount = 0;
         Dictionary<string, string> jumps = new Dictionary<string, string>();
+        bool wcError = false;
 
         bool useRangeOverride = true;
         bool showAsteroids = false;
@@ -123,14 +124,6 @@
         {
             Echo("Starting...");
             radarSurface = new RadarSurface(titleBarColor, backColor, lineColor, planeColor, textColor, missileLockColor, projectionAngle, MaxRange, drawQuadrants);
-            try
-            {
-                wcapi.Activate(Me);
-            }
-            catch
-            {
-                Echo("Weaponcore API failed to activate.");
-            }
             GetBlocks();
             Echo("Loaded!");
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
@@ -147,18 +140,33 @@
                         break;
                 }
             }
-            tickNum++;
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs / 10 * 0.01);
             if (averageRuntime > maxMs * 0.9)
             {
                 return;
             }
-            if (turretsCount < 1)
+            tickNum++;
+            if (tickNum >= 30)
             {
-                Echo("ERROR: No WC weapon found,");
-                Echo("please add one to continue.");
+                GetBlocks();
+                tickNum = 0;
+            }
+            if (wcError)
+            {
+                Echo("ERROR: Weaponcore API failed to activate");
                 SendStatus("<color=255,0,0,255>RADAR ERROR: Check PB for more info!");
                 WriteStatus();
+                ClearAll();
+                WriteError();
+                return;
+            }
+            if (turretsCount < 1)
+            {
+                Echo("ERROR: No Weaponcore turrets found");
+                SendStatus("<color=255,0,0,255>RADAR ERROR: Check PB for more info!");
+                WriteStatus();
+                ClearAll();
+                WriteError();
                 return;
             }
             Echo(Math.Round(averageRuntime, 4).ToString() + "ms");
@@ -180,22 +188,17 @@
             foreach (IMyTextSurface lcd in radarLCDs)
             {
                 radarSurface.DrawRadar(lcd, false);
-            }           
-            if(tickNum % 6 == 0)
+            }
+            if (tickNum % 6 == 0)
             {
                 if (scriptRunningChar == @" / ") scriptRunningChar = @" \ ";
                 else scriptRunningChar = @" / ";
             }
-            if (runtime) SendStatus("<color=100,100,100,255>"+scriptNameVersion+" <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() +" ms"+ scriptRunningChar);
+            if (runtime) SendStatus("<color=100,100,100,255>" + scriptNameVersion + " <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " ms" + scriptRunningChar);
             string hideString = "<color=139,0,0,255>Off";
             if (hideNonimportant) hideString = "<color=0,128,0,255>On";
             if (hideStatus) SendStatus("<color=211,211,211,255>Hide grids: " + hideString);
             WriteStatus();
-            if (tickNum == 30)
-            {
-                GetBlocks();
-                tickNum = 0;
-            }
         }
 
         List<string> statusList = new List<string>();
@@ -281,7 +284,6 @@
         {
             GetAllTargets();
             ClearAll();
-
 
             foreach (var obj in targetDataDict)
             {
@@ -445,6 +447,18 @@
                 }
             }
             return false;
+        }
+
+        void WriteError()
+        {
+            foreach (IMyTextSurface lcd in targetLCDs)
+            {
+                lcd.WriteText(ColorToColor(Color.Red) + "Error");
+            }
+            foreach (IMyTextSurface lcd in friendLCDs)
+            {
+                lcd.WriteText(ColorToColor(Color.Red) + "Error");
+            }
         }
 
         void ClearAll()
@@ -663,6 +677,17 @@
 
         void GetBlocks()
         {
+            wcError = false;
+            try
+            {
+                wcapi.Activate(Me);
+            }
+            catch
+            {
+                Echo("Weaponcore API failed to activate.");
+                wcError = true;
+                return;
+            }
             friendLCDs.Clear();
             targetLCDs.Clear();
             radarLCDs.Clear();
