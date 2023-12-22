@@ -1,14 +1,20 @@
 #region code 
-        static char[,] gridMatrix;
+        bool init = false;
+        bool firstRun = true;
+        static char[,] gridMatrix = new char[0,0];
         static List<IMyTextSurface> shipLcds = new List<IMyTextSurface>();
         static List<IMyGasTank> tanks = new List<IMyGasTank>();
         static List<IMyCockpit> cockpits = new List<IMyCockpit>();
-        Vector3L boundBox = Vector3L.Zero;
+        Vector3I boundBox = Vector3I.Zero;
         IMyCockpit refCockpit;
+        double averageRuntime = 0;
+        int lastScanRow = 0;
+
         public Program()
         {
             Echo("Starting...");
             GetBlocks();
+            lastScanRow = boundBox.Z + 1;
             Echo("Loaded!");
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
         }
@@ -16,40 +22,54 @@
         public void Main(string argument, UpdateType updateSource)
         {
             ticknum++;
-            if(ticknum%10==0)
+            if (!init)
+            {
+                InitScript();
+                return;
+            }
+            averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs * 0.01);
+            if (ticknum%2==0)
+            {
+                ScanShape();
+                FillGridMatrix();
+            }
+            if (ticknum%10==0)
             {
                 GetBlocks();
+                WriteToLcds();
                 ticknum = 0;
             }
-            Echo(gridMatrix.Length.ToString());
+
+            Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString()+ " ms");
 
             Echo("Width: " + boundBox.X.ToString());
             Echo("Height: " + boundBox.Y.ToString());
             Echo("Length: " + boundBox.Z.ToString());
 
-            Echo(Me.CubeGrid.Max.ToString());
-            Echo(Me.CubeGrid.Min.ToString());
-
-            foreach (IMyGasTank tank in tanks)
-            {           
-                Echo(CorrectRotation(tank.Position-Me.CubeGrid.Max).ToString());
-                Echo(Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).Z - boundBox.Z).ToString());
-            }
             foreach (IMyGasTank tank in tanks)
             {
-                Echo("matrix");
-                Echo(Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).Z - boundBox.Z).ToString() +" --- "+ CorrectRotation(tank.Position - Me.CubeGrid.Max).X.ToString());
-                gridMatrix[Math.Abs(CorrectRotation(tank.Position-Me.CubeGrid.Max).Z-boundBox.Z), CorrectRotation(tank.Position - Me.CubeGrid.Max).X] = '';
+                //Echo(Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).Z - boundBox.Z).ToString() +" --- "+ CorrectRotation(tank.Position - Me.CubeGrid.Max).X.ToString());
+                gridMatrix[Math.Abs(Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).Z) - boundBox.Z), Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).X)] = 'X';
+            }                  
+        }
+        void InitScript()
+        {
+            if (ticknum <= boundBox.Z)
+            {
+                Echo("Loading blocks... " + Math.Round(((decimal)ticknum / (decimal)boundBox.Z) * 100, 1) + "%");
+                ScanShape();
             }
-            Echo("hi");
-            FillGridMatrix();
-            WriteToLcds();          
+            else
+            {
+                init = true;
+                ticknum = 0;
+            }
         }
         void FillGridMatrix()
         {
-            for(int z = 0; z < boundBox.Z; z++)
+            for(int z = 0; z <= boundBox.Z; z++)
             {
-                for (int x = 0; x < boundBox.X; x++)
+                for (int x = 0; x <= boundBox.X; x++)
                 {
                     if (gridMatrix[z,x] == 0)
                     {
@@ -63,10 +83,10 @@
             foreach (IMyTextSurface lcd in shipLcds)
             {
                 List<string> tempList = new List<string>();
-                for (int z = 0; z < boundBox.Z; z++)
+                for (int z = 0; z <= boundBox.Z; z++)
                 {
                     string tempString = "";
-                    for (int x = 0; x < boundBox.X; x++)
+                    for (int x = 0; x <= boundBox.X; x++)
                     {
                         tempString = tempString + gridMatrix[z, x];
                     }
@@ -85,7 +105,7 @@
             // clear lists here
             shipLcds.Clear();
             tanks.Clear();
-            cockpits.Clear();
+            cockpits.Clear();          
             GridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(null, SortBlocks);
             foreach (IMyCockpit cockpit in cockpits)
             {
@@ -102,15 +122,13 @@
                     refCockpit = cockpits[0];
                 }
             }
-            Echo(refCockpit.Orientation.Forward.ToString());
-            Echo(refCockpit.Orientation.Left.ToString());
-            Echo(refCockpit.Orientation.Up.ToString());
-            Echo("h");
-            Echo((Me.CubeGrid.Max - Me.CubeGrid.Min).ToString());
             boundBox = Vector3I.Abs(CorrectRotation(Me.CubeGrid.Max - Me.CubeGrid.Min));
-            Echo("g");
-            Echo(boundBox.ToString());
-            gridMatrix = new char[boundBox.Z, boundBox.X];
+            if(firstRun)
+            {
+                Array.Clear(gridMatrix, 0, gridMatrix.Length);
+                gridMatrix = new char[boundBox.Z + 1, boundBox.X + 1];
+                firstRun = false;
+            }
         }
 
         bool SortBlocks(IMyTerminalBlock block)
@@ -132,6 +150,28 @@
                 cockpits.Add(block as IMyCockpit);
             }
             return false;
+        }
+
+        void ScanShape()
+        {          
+            if (lastScanRow > boundBox.Z)
+            {
+                lastScanRow = 0;
+            }
+            for (int width = Me.CubeGrid.Min.X; width < Me.CubeGrid.Max.X+1; width++)
+            {
+                for (int heigth = Me.CubeGrid.Min.Y; heigth < Me.CubeGrid.Max.Y+1; heigth++)
+                {
+                    if (Me.CubeGrid.CubeExists(new Vector3I(width, heigth, lastScanRow)))
+                    {
+                        //Echo(new Vector3I(width, heigth, length).ToString());
+                        //Echo(Math.Abs((Math.Abs(CorrectRotation(new Vector3I(width, heigth, length) - Me.CubeGrid.Max).Z) - boundBox.Z)).ToString() + "   " + Math.Abs(CorrectRotation(new Vector3I(width, heigth, length) - Me.CubeGrid.Max).X).ToString());
+                        gridMatrix[Math.Abs(Math.Abs(CorrectRotation(new Vector3I(width, heigth, lastScanRow) - Me.CubeGrid.Max).Z)-boundBox.Z), Math.Abs(CorrectRotation(new Vector3I(width, heigth, lastScanRow) - Me.CubeGrid.Max).X)] = '+';
+                        continue;
+                    }
+                }
+            }
+            lastScanRow++;
         }
 
          Vector3I CorrectRotation(Vector3I vector)
