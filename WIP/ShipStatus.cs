@@ -1,14 +1,28 @@
 #region code 
         bool init = false;
         bool firstRun = true;
-        static char[,] gridMatrix = new char[0,0];
+        static string[,] gridMatrix = new string[0,0];
+        static bool[,,] originalBlocks = new bool[0, 0, 0];
         static List<IMyTextSurface> shipLcds = new List<IMyTextSurface>();
-        static List<IMyGasTank> tanks = new List<IMyGasTank>();
         static List<IMyCockpit> cockpits = new List<IMyCockpit>();
+        static List<IMyTerminalBlock> blocksToScan = new List<IMyTerminalBlock>();
         Vector3I boundBox = Vector3I.Zero;
         IMyCockpit refCockpit;
         double averageRuntime = 0;
         int lastScanRow = 0;
+
+
+        /*static char backgroundColor = Rgb(1, 1, 1);
+        static char hullColor = Rgb(5,5,5);
+        static char tankColor = Rgb(5,2,1);
+        static char reactorColor = Rgb(0,5,0);
+        static char connectorColor = Rgb(0,0,5);*/
+        static string hullColor = "<color=255,255,255,255>██";
+        static string backgroundColor = "  ";
+        static string tankColor = "<color=255,100,100,255>██";
+        static string reactorColor = "<color=0,255,0,255>██";
+
+        static char Rgb(byte r, byte g, byte b) { return (char)(0xe100 + (r << 6) + (g << 3) + b); }
 
         public Program()
         {
@@ -16,7 +30,7 @@
             GetBlocks();
             lastScanRow = boundBox.Z + 1;
             Echo("Loaded!");
-            Runtime.UpdateFrequency = UpdateFrequency.Update10;
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
         }
         int ticknum = 0;
         public void Main(string argument, UpdateType updateSource)
@@ -24,33 +38,41 @@
             ticknum++;
             if (!init)
             {
-                InitScript();
+                InitScript(); // scan all blocks one row per tick to prevent overheating
                 return;
             }
             averageRuntime = averageRuntime * 0.99 + (Runtime.LastRunTimeMs * 0.01);
-            if (ticknum%2==0)
-            {
-                ScanShape();
-                FillGridMatrix();
-            }
             if (ticknum%10==0)
             {
-                GetBlocks();
-                WriteToLcds();
+                GetBlocks(); // update block lists
+                ScanShape(); // get ship shape (scans all blocks)
+                FillGridMatrix(); // fills empty spots with background color
+                UpdateBlocks(); // updates important terminal blocks (tanks, reactors etc)
+                WriteToLcds(); // updates lcd
                 ticknum = 0;
             }
 
             Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString()+ " ms");
-
             Echo("Width: " + boundBox.X.ToString());
             Echo("Height: " + boundBox.Y.ToString());
             Echo("Length: " + boundBox.Z.ToString());
-
-            foreach (IMyGasTank tank in tanks)
+            
+        }
+        void UpdateBlocks() // update important terminal blocks 
+        {
+            foreach (IMyTerminalBlock block in blocksToScan)
             {
-                //Echo(Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).Z - boundBox.Z).ToString() +" --- "+ CorrectRotation(tank.Position - Me.CubeGrid.Max).X.ToString());
-                gridMatrix[Math.Abs(Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).Z) - boundBox.Z), Math.Abs(CorrectRotation(tank.Position - Me.CubeGrid.Max).X)] = 'X';
-            }                  
+                string color = "";
+                if (block is IMyGasTank) color = tankColor;
+                if (block is IMyReactor) color = reactorColor;
+                for (int length = CorrectRotation(block.Min).Z; length <= CorrectRotation(block.Max).Z; length++)
+                {
+                    for (int width = CorrectRotation(block.Min).X; width <= CorrectRotation(block.Max).X; width++)
+                    {
+                        gridMatrix[Math.Abs(Math.Abs((length - CorrectRotation(Me.CubeGrid.Max).Z)) - boundBox.Z), Math.Abs(width - CorrectRotation(Me.CubeGrid.Max).X)] = color;
+                    }
+                }
+            }
         }
         void InitScript()
         {
@@ -65,15 +87,15 @@
                 ticknum = 0;
             }
         }
-        void FillGridMatrix()
+        void FillGridMatrix() // fill empty spots with background color
         {
             for(int z = 0; z <= boundBox.Z; z++)
             {
                 for (int x = 0; x <= boundBox.X; x++)
                 {
-                    if (gridMatrix[z,x] == 0)
+                    if (gridMatrix[z,x] == null)
                     {
-                        gridMatrix[z,x] = ' ';
+                        gridMatrix[z,x] = backgroundColor;
                     }
                 }
             }
@@ -104,8 +126,8 @@
         { 
             // clear lists here
             shipLcds.Clear();
-            tanks.Clear();
-            cockpits.Clear();          
+            cockpits.Clear();      
+            blocksToScan.Clear();
             GridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(null, SortBlocks);
             foreach (IMyCockpit cockpit in cockpits)
             {
@@ -123,10 +145,13 @@
                 }
             }
             boundBox = Vector3I.Abs(CorrectRotation(Me.CubeGrid.Max - Me.CubeGrid.Min));
-            if(firstRun)
+            Vector3I realBoundBox = Vector3I.Abs(Me.CubeGrid.Max - Me.CubeGrid.Min);
+            if (firstRun)
             {
                 Array.Clear(gridMatrix, 0, gridMatrix.Length);
-                gridMatrix = new char[boundBox.Z + 1, boundBox.X + 1];
+                gridMatrix = new string[boundBox.Z + 1, boundBox.X + 1];
+                originalBlocks = new bool[realBoundBox.X+1, realBoundBox.Y+1, realBoundBox.Z+1];
+
                 firstRun = false;
             }
         }
@@ -143,7 +168,11 @@
             }
             if(block is IMyGasTank && block.DetailedInfo.Contains("Hydrogen Tank") && !block.DetailedInfo.Contains("Small"))
             {
-                tanks.Add(block as IMyGasTank);
+                blocksToScan.Add(block as IMyGasTank);
+            }
+            if(block is IMyReactor)
+            {
+                blocksToScan.Add(block as IMyReactor);
             }
             if(block is IMyCockpit)
             {
@@ -152,11 +181,11 @@
             return false;
         }
 
-        void ScanShape()
+        void ScanShape() // scan all blocks to get ship shape
         {          
             if (lastScanRow > boundBox.Z)
             {
-                lastScanRow = 0;
+                lastScanRow = Me.CubeGrid.Min.Z;
             }
             for (int width = Me.CubeGrid.Min.X; width < Me.CubeGrid.Max.X+1; width++)
             {
@@ -166,8 +195,15 @@
                     {
                         //Echo(new Vector3I(width, heigth, length).ToString());
                         //Echo(Math.Abs((Math.Abs(CorrectRotation(new Vector3I(width, heigth, length) - Me.CubeGrid.Max).Z) - boundBox.Z)).ToString() + "   " + Math.Abs(CorrectRotation(new Vector3I(width, heigth, length) - Me.CubeGrid.Max).X).ToString());
-                        gridMatrix[Math.Abs(Math.Abs(CorrectRotation(new Vector3I(width, heigth, lastScanRow) - Me.CubeGrid.Max).Z)-boundBox.Z), Math.Abs(CorrectRotation(new Vector3I(width, heigth, lastScanRow) - Me.CubeGrid.Max).X)] = '+';
-                        continue;
+                        if (!init)
+                        {
+                            gridMatrix[Math.Abs(Math.Abs(CorrectRotation(new Vector3I(width, heigth, lastScanRow) - Me.CubeGrid.Max).Z) - boundBox.Z), Math.Abs(CorrectRotation(new Vector3I(width, heigth, lastScanRow) - Me.CubeGrid.Max).X)] = hullColor;
+                            originalBlocks[Math.Abs(width-Me.CubeGrid.Max.X), Math.Abs(heigth - Me.CubeGrid.Max.Y), Math.Abs(lastScanRow - Me.CubeGrid.Max.Z)] = true;
+                        }
+                        else
+                        {
+                            continue;
+                        }
                     }
                 }
             }
