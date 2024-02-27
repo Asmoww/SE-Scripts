@@ -1,18 +1,27 @@
-        // GDV 1.21
+        // GDV 1.22
 
-        // set one cockpit as main, it's used for orientation
-        // artificial masses should be near the center of mass, otherwise the drive will rotate the ship
-        // spherical gens should only be placed in front of or behind the artificial masses
-        // - recommended to have an equal amount on both the front and back
-        // - otherwise gravity drive will be disabled while shield is active to prevent unwanted movement
-        // shield is toggled between modes with the argument "shield" or directly with "push", "pull" or "off"
-        // gravity drive can be toggled with "drive"
+        // the cockpit or remote control that is being controlled by a player will be automatically selected -
+        // you can set one cockpit as main for it to have priority in case multiple are occupied and the script fails to detect the correct one 
+
+        // some instructions for designing the gdrive
+        // - artificial masses should be near the center of mass, otherwise the drive will rotate the ship
+        // - spherical gens should only be placed in front of or behind the artificial masses
+        // -- recommended to have an equal amount on both the front and back
+        // -- otherwise gravity drive will be disabled while shield is active to prevent unwanted movement
+        // - add at least one thruster for dampening to work
+
+        // arguments you can use with hotbar
+        // - shield is toggled between modes with the argument "shield" or directly with "push", "pull" or "off"
+        // - gravity drive can be toggled on and off with "drive"
+
         // name an LCD "status lcd" to broadcast misc. info to hudlcd, multiple scripts can use the same status lcd
-        // --Asmoww
+
+        // --Asmoww (asmoww on Discord)
 
         // general settings
 
         double maxMs = 0.3; // maximun allowed average ms per tick, 0.3 ms is allowed on most servers
+        int refreshBlocksTick = 60; // how often to check for changes in blocks, in ticks. 60 ticks = 1 second
         int statusPriority = 1; // lower number = higher up on the status lcd, all scripts need to have a different number
 
         // gravity drive settings
@@ -33,8 +42,8 @@
         // code below code below code below code below code below code below code below code below code below code below code below
 
 
-        IMyCockpit cockpit;
-        List<IMyCockpit> cockpits = new List<IMyCockpit>();
+        IMyShipController refBlock;
+        List<IMyShipController> shipcontrollers = new List<IMyShipController>();
         List<IMyGravityGenerator> gens = new List<IMyGravityGenerator>();
         List<IMyGravityGeneratorSphere> spheres = new List<IMyGravityGeneratorSphere>();
         List<IMyArtificialMassBlock> masses = new List<IMyArtificialMassBlock>();
@@ -51,7 +60,7 @@
         {
             Echo("Loading...");
             GetBlocks(false);
-            SetFieldSize();
+            if(!waitTillErrorFixed) SetFieldSize();
             // Update10 works decently, Update100 doesn't work 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
             Echo("Loaded succesfully!");
@@ -106,23 +115,26 @@
                 return;
             }
 
-            tickNum++;           
+            tickNum++;
 
-            if (waitTillErrorFixed)
+            if (tickNum >= refreshBlocksTick)
             {
-                if (tickNum == 0 || tickNum == 10 || tickNum == 20)
+                GetBlocks(true);
+                if (waitTillErrorFixed)
                 {
+                    tickNum = 0;
                     SendStatus("<color=255,0,0,255>GDRIVE ERROR: Check PB for more info!");
                     WriteStatus();
                 }
-                return;
+                else SetFieldSize();
             }
+            if (waitTillErrorFixed) return;
 
             Echo("Gravity generators: " + gens.Count.ToString() + " + " + spheres.Count.ToString() + "s");
             Echo("Artificial masses: " + masses.Count.ToString());
             Echo("Auto field size: " + autoFieldSize.ToString());
             Echo("Lowest speed: " + lowestSpeed.ToString());
-            Echo("Efficiency: " + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%");
+            Echo("Efficiency: " + Math.Round((100 - (refBlock.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%");
             Echo("Runtime: " + Math.Round(averageRuntime, 4).ToString() + " / " + maxMs.ToString() + " ms");
 
             nocontinue = false;
@@ -144,17 +156,17 @@
                 PowerOnOff(false);
                 nocontinue = true;
             }
-            else if (Math.Round(cockpit.GetShipSpeed(), 2) == 0 && NoPilotInput())
+            else if (Math.Round(refBlock.GetShipSpeed(), 2) == 0 && NoPilotInput())
             {
                 driveString = "<color=211,211,211,255>Drive: <color=173,216,230,255>Standby";
                 Echo("Velocity: ---\nStatus: Standby");
                 PowerOnOff(false);
                 nocontinue = true;
             }
-            else if (!cockpit.DampenersOverride && NoPilotInput())
+            else if (!refBlock.DampenersOverride && NoPilotInput())
             {
                 driveString = "<color=211,211,211,255>Drive: <color=160,160,0,160>Drifting";
-                Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: Drifting");
+                Echo("Velocity: " + Math.Round(refBlock.GetShipSpeed(), 2).ToString() + " m/s\nStatus: Drifting");
                 PowerOnOff(false);
                 nocontinue = true;
             }
@@ -166,7 +178,7 @@
                     status = "<color=139,0,0,255>Braking";
                 }
                 driveString = "<color=211,211,211,255>Drive: " + status;
-                Echo("Velocity: " + Math.Round(cockpit.GetShipSpeed(), 2).ToString() + " m/s\nStatus: " + status);
+                Echo("Velocity: " + Math.Round(refBlock.GetShipSpeed(), 2).ToString() + " m/s\nStatus: " + status);
                 PowerOnOff(true);
             }
 
@@ -180,30 +192,28 @@
                 if (runtime) SendStatus("<color=100,100,100,255>GDV <color=70,70,70,255>" + Math.Round(averageRuntime, 2).ToString() + " ms" + scriptRunningChar);
                 if (gdrive) SendStatus(driveString);
                 if (gshield) SendStatus("<color=211,211,211,255>Shield: " + shieldString);
-                if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (cockpit.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
+                if (efficiency) effString = "<color=100,100,100,255>" + Math.Round((100 - (refBlock.GetNaturalGravity().Length() / 9.81 * 100 * 2)), 2) + "%";
                 if (blocks) SendStatus(effString + " <color=70,70,70,255>G " + gens.Count.ToString() + " / S " + spheres.Count.ToString() + " / A " + masses.Count.ToString());
                 WriteStatus();
             }
 
-            if (tickNum == 60)
+            if (tickNum == refreshBlocksTick)
             {
                 if (scriptRunningChar == @" / ") scriptRunningChar = @" \ ";
                 else scriptRunningChar = @" / ";
                 tickNum = 0;
-                SetFieldSize();
-                GetBlocks(true);
             }
 
             if (nocontinue) return;
 
-            velVect.X = Vector3D.TransformNormal(cockpit.GetShipVelocities().LinearVelocity, MatrixD.Transpose(cockpit.WorldMatrix)).X * IsZero(cockpit.MoveIndicator.X) * Convert.ToInt32(cockpit.DampenersOverride) * UnderLowestSpeed();
-            velVect.Y = Vector3D.TransformNormal(cockpit.GetShipVelocities().LinearVelocity, MatrixD.Transpose(cockpit.WorldMatrix)).Y * IsZero(cockpit.MoveIndicator.Y) * Convert.ToInt32(cockpit.DampenersOverride) * UnderLowestSpeed();
-            velVect.Z = Vector3D.TransformNormal(cockpit.GetShipVelocities().LinearVelocity, MatrixD.Transpose(cockpit.WorldMatrix)).Z * IsZero(cockpit.MoveIndicator.Z) * Convert.ToInt32(cockpit.DampenersOverride) * UnderLowestSpeed();
-            moveInd = cockpit.MoveIndicator * 9.8f;
+            velVect.X = Vector3D.TransformNormal(refBlock.GetShipVelocities().LinearVelocity, MatrixD.Transpose(refBlock.WorldMatrix)).X * IsZero(refBlock.MoveIndicator.X) * Convert.ToInt32(refBlock.DampenersOverride) * UnderLowestSpeed();
+            velVect.Y = Vector3D.TransformNormal(refBlock.GetShipVelocities().LinearVelocity, MatrixD.Transpose(refBlock.WorldMatrix)).Y * IsZero(refBlock.MoveIndicator.Y) * Convert.ToInt32(refBlock.DampenersOverride) * UnderLowestSpeed();
+            velVect.Z = Vector3D.TransformNormal(refBlock.GetShipVelocities().LinearVelocity, MatrixD.Transpose(refBlock.WorldMatrix)).Z * IsZero(refBlock.MoveIndicator.Z) * Convert.ToInt32(refBlock.DampenersOverride) * UnderLowestSpeed();
+            moveInd = refBlock.MoveIndicator * 9.8f;
 
             foreach (IMyGravityGenerator gen in gens)
             {
-                switch (cockpit.Orientation.TransformDirectionInverse(gen.Orientation.Up))
+                switch (refBlock.Orientation.TransformDirectionInverse(gen.Orientation.Up))
                 {
                     case Base6Directions.Direction.Up:
                         gen.GravityAcceleration = (float)-(moveInd.Y - velVect.Y);
@@ -346,7 +356,7 @@
         }
         public bool NoPilotInput()
         {
-            return cockpit.MoveIndicator.X == 0 && cockpit.MoveIndicator.Y == 0 && cockpit.MoveIndicator.Z == 0;
+            return refBlock.MoveIndicator.X == 0 && refBlock.MoveIndicator.Y == 0 && refBlock.MoveIndicator.Z == 0;
         }
         public int IsZero(float value)
         {
@@ -358,7 +368,7 @@
         }
         public int UnderLowestSpeed()
         {
-            if (cockpit.GetShipVelocities().LinearVelocity.Length() < lowestSpeed)
+            if (refBlock.GetShipVelocities().LinearVelocity.Length() < lowestSpeed)
             {
                 return 0;
             }
@@ -415,8 +425,8 @@
         }
         public void Clear()
         {
-            cockpit = null;
-            cockpits.Clear();
+            refBlock = null;
+            shipcontrollers.Clear();
             statusLCDs.Clear();
             gens.Clear();
             masses.Clear();
@@ -426,31 +436,42 @@
             fieldMin = Vector3I.Zero;
             massCenterVector = Vector3D.Zero;
         }
+        public void GetMainShipController()
+        {
+            GridTerminalSystem.GetBlocksOfType(shipcontrollers);
+            foreach (IMyShipController currentController in shipcontrollers)
+            {
+                if (currentController.IsUnderControl && currentController.CanControlShip && currentController.IsMainCockpit)
+                {
+                    refBlock = currentController;
+                }
+            }
+            if (refBlock == null)
+            {
+                foreach (IMyShipController currentController in shipcontrollers)
+                {
+                    if (currentController.IsUnderControl && currentController.CanControlShip)
+                    {
+                        refBlock = currentController;
+                    }
+                }
+            }
+            if (refBlock == null && shipcontrollers.Any())
+            {
+                refBlock = shipcontrollers[0];
+            }
+        }
         public void GetBlocks(bool clear)
         {
             if (clear) Clear();
             waitTillErrorFixed = false;
 
-            GridTerminalSystem.GetBlocksOfType(cockpits);
-            int maincockpitcount = 0;
             try
             {
-                foreach (IMyCockpit mainCockpit in cockpits)
+                GetMainShipController();
+                if(refBlock == null)
                 {
-                    if (mainCockpit.IsMainCockpit)
-                    {
-                        maincockpitcount++;
-                        cockpit = mainCockpit;
-                    }
-                }
-                if (maincockpitcount == 0)
-                {
-                    Echo("No main cockpit was found.");
-                    waitTillErrorFixed = true;
-                }
-                else if (maincockpitcount > 1)
-                {
-                    Echo("More than 1 main cockpit were found.");
+                    Echo("No cockpit or remote control found, please add one.");
                     waitTillErrorFixed = true;
                 }
 
@@ -501,7 +522,7 @@
                 }
                 foreach (IMyArtificialMassBlock mass in masses)
                 {
-                    massCenterVector += -Vector3D.TransformNormal(mass.GetPosition() - cockpit.CenterOfMass, MatrixD.Transpose(cockpit.WorldMatrix));
+                    massCenterVector += -Vector3D.TransformNormal(mass.GetPosition() - refBlock.CenterOfMass, MatrixD.Transpose(refBlock.WorldMatrix));
                 }
                 massCenterVector /= masses.Count;
             }
@@ -514,7 +535,7 @@
         public int IsFrontOrBack(IMyGravityGeneratorSphere sphere)
         {
             if (massCenterVector == null) return 0;
-            if ((-Vector3D.TransformNormal(sphere.GetPosition() - cockpit.CenterOfMass, MatrixD.Transpose(cockpit.WorldMatrix))).Z > massCenterVector.Z)
+            if ((-Vector3D.TransformNormal(sphere.GetPosition() - refBlock.CenterOfMass, MatrixD.Transpose(refBlock.WorldMatrix))).Z > massCenterVector.Z)
             {
                 return 1;
             }
